@@ -1,0 +1,206 @@
+---
+title: "Run object detection inference in minutes"
+description: "Use MMDetection's demo scripts and DetInferencer Python API to run object detection on images, visualize bounding boxes, and interpret prediction output."
+keywords: ["mmdetection quickstart", "inference", "DetInferencer", "image_demo", "object detection demo"]
+---
+
+MMDetection ships ready-to-run demo scripts and a high-level Python API that let you detect objects in an image without writing a training loop or loading raw PyTorch tensors. This guide walks you through both approaches and explains how to read the output.
+
+<Note>
+  Complete the [installation guide](/get-started/installation) before following these steps. You need a working MMDetection environment and a downloaded checkpoint file.
+</Note>
+
+## Download a model
+
+Before running inference, download a config file and a pre-trained checkpoint. The example below uses RTMDet-tiny, a compact real-time detector that runs well on CPU.
+
+```bash
+mim download mmdet --config rtmdet_tiny_8xb32-300e_coco --dest .
+```
+
+This writes two files to your current directory:
+
+- `rtmdet_tiny_8xb32-300e_coco.py` — the model configuration
+- `rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth` — the pre-trained weights
+
+## Run inference from the command line
+
+<Steps>
+  <Step title="Run the image demo script">
+    The `demo/image_demo.py` script wraps `DetInferencer` and handles argument parsing, output saving, and progress reporting. Pass the image path and model name or config path as positional arguments.
+
+    <CodeGroup>
+
+    ```bash Using a model alias
+    python demo/image_demo.py demo/demo.jpg rtmdet-s
+    ```
+
+    ```bash Using a config and weights file
+    python demo/image_demo.py demo/demo.jpg \
+        rtmdet_tiny_8xb32-300e_coco.py \
+        --weights rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth \
+        --device cpu
+    ```
+
+    </CodeGroup>
+
+    By default, results are saved to `./outputs/`. The directory contains:
+    - `vis/` — annotated images with bounding boxes drawn
+    - `preds/` — JSON files with raw prediction data
+  </Step>
+
+  <Step title="Inspect the output directory">
+    After the script finishes, open `./outputs/vis/demo.jpg` to see the detected objects with bounding boxes and class labels overlaid on the image.
+
+    To print predictions to the console instead of saving them, add `--print-result`:
+
+    ```bash
+    python demo/image_demo.py demo/demo.jpg rtmdet-s --print-result --no-save-pred
+    ```
+  </Step>
+
+  <Step title="Adjust the score threshold">
+    By default, only detections with a confidence score above 0.3 are drawn. Use `--pred-score-thr` to raise or lower this threshold.
+
+    ```bash
+    python demo/image_demo.py demo/demo.jpg rtmdet-s --pred-score-thr 0.5
+    ```
+  </Step>
+</Steps>
+
+## Run inference from Python
+
+The `DetInferencer` class provides a clean Python interface that handles model loading, preprocessing, forward pass, and visualization in a single call.
+
+<Steps>
+  <Step title="Instantiate DetInferencer">
+    Import `DetInferencer` and initialize it with a model name or config path plus a checkpoint.
+
+    ```python
+    from mmdet.apis import DetInferencer
+
+    # Initialize using a model alias (downloads weights automatically)
+    inferencer = DetInferencer(model='rtmdet-s', device='cpu')
+
+    # Or initialize using local config and weights files
+    inferencer = DetInferencer(
+        model='rtmdet_tiny_8xb32-300e_coco.py',
+        weights='rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth',
+        device='cpu',
+    )
+    ```
+
+    <Tip>
+      Use `device='cuda:0'` to run inference on the first GPU. `DetInferencer` also accepts `None` to auto-select the available device.
+    </Tip>
+  </Step>
+
+  <Step title="Call the inferencer">
+    Call the `inferencer` instance directly with an image path, a numpy array, or a directory path containing images.
+
+    ```python
+    # Single image by path
+    result = inferencer('demo/demo.jpg')
+
+    # Save visualizations and predictions to a directory
+    result = inferencer(
+        'demo/demo.jpg',
+        out_dir='outputs/',
+        pred_score_thr=0.3,
+    )
+
+    # Process a folder of images
+    result = inferencer('path/to/image/folder/', out_dir='outputs/')
+    ```
+  </Step>
+
+  <Step title="Read the prediction output">
+    `inferencer(...)` returns a dict with two keys: `predictions` and `visualization`.
+
+    ```python
+    result = inferencer('demo/demo.jpg', no_save_pred=True, no_save_vis=True)
+
+    predictions = result['predictions']
+    # predictions is a list with one entry per input image
+    pred = predictions[0]
+
+    print(pred['labels'])   # list of integer class IDs
+    print(pred['scores'])   # list of float confidence scores
+    print(pred['bboxes'])   # list of [x1, y1, x2, y2] bounding boxes
+    ```
+
+    Example output for a street scene image:
+
+    ```
+    labels: [2, 2, 2, 13, 7]
+    scores: [0.94, 0.91, 0.87, 0.76, 0.61]
+    bboxes: [[116.3, 195.1, 322.8, 374.9], ...]
+    ```
+
+    Class IDs correspond to COCO categories (e.g., `2` = car, `7` = truck, `13` = bench). When instance segmentation models are used, a `masks` key is also present containing run-length encoded mask data.
+  </Step>
+</Steps>
+
+## Visualize results
+
+`DetInferencer` supports several visualization options.
+
+### Save to disk
+
+Pass `out_dir` to write annotated images and JSON predictions to disk:
+
+```python
+inferencer(
+    'demo/demo.jpg',
+    out_dir='my_outputs/',
+    pred_score_thr=0.4,
+)
+# Annotated image → my_outputs/vis/demo.jpg
+# Prediction JSON → my_outputs/preds/demo.json
+```
+
+### Display in a window
+
+Pass `show=True` to display the annotated image in a popup window during inference. This is useful when running scripts locally.
+
+```python
+inferencer('demo/demo.jpg', show=True, no_save_vis=True, no_save_pred=True)
+```
+
+### Return as numpy arrays
+
+Pass `return_vis=True` to get the visualized images as numpy arrays, useful for embedding in a Jupyter notebook:
+
+```python
+result = inferencer('demo/demo.jpg', return_vis=True, no_save_vis=True, no_save_pred=True)
+vis_image = result['visualization'][0]  # numpy array, shape (H, W, 3), BGR
+
+# Display in a notebook
+import matplotlib.pyplot as plt
+plt.imshow(vis_image[:, :, ::-1])
+plt.axis('off')
+plt.show()
+```
+
+## Other demo scripts
+
+The `demo/` directory includes additional scripts for other input types:
+
+| Script | Description |
+|---|---|
+| `demo/image_demo.py` | Single image or image folder inference |
+| `demo/video_demo.py` | Frame-by-frame inference on a video file |
+| `demo/webcam_demo.py` | Real-time inference from a webcam feed |
+| `demo/large_image_demo.py` | Inference on high-resolution images using patch-based sliding window |
+| `demo/mot_demo.py` | Multi-object tracking on video (requires tracking install) |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration guide" icon="sliders" href="/user-guides/configuration">
+    Learn how MMDetection config files work and how to customize training runs.
+  </Card>
+  <Card title="Training a model" icon="graduation-cap" href="/user-guides/train">
+    Train a detector on standard datasets or your own custom data.
+  </Card>
+</CardGroup>

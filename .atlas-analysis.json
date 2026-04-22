@@ -1,0 +1,94 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "MMDetection",
+  "projectDescription": "An open-source object detection toolbox built on PyTorch, supporting object detection, instance segmentation, panoptic segmentation, and semi-supervised detection with 100+ pretrained models.",
+  "theme": "palm",
+  "primaryColor": "#5d6c75",
+  "lightColor": "#b5bec1",
+  "darkColor": "#2e7fc0",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "get-started/installation",
+              "get-started/quickstart"
+            ]
+          },
+          {
+            "group": "User Guides",
+            "pages": [
+              "user-guides/configuration",
+              "user-guides/dataset-preparation",
+              "user-guides/train",
+              "user-guides/inference",
+              "user-guides/visualization",
+              "user-guides/useful-tools"
+            ]
+          },
+          {
+            "group": "Advanced Guides",
+            "pages": [
+              "advanced-guides/customize-models",
+              "advanced-guides/customize-dataset",
+              "advanced-guides/customize-transforms",
+              "advanced-guides/customize-losses",
+              "advanced-guides/data-flow"
+            ]
+          },
+          {
+            "group": "Model Zoo",
+            "pages": [
+              "model-zoo/overview",
+              "model-zoo/detection-models",
+              "model-zoo/segmentation-models"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core APIs",
+            "pages": [
+              "api/det-inferencer",
+              "api/models",
+              "api/datasets",
+              "api/evaluation"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Modular design for building custom detection frameworks",
+    "Support for object detection, instance segmentation, panoptic segmentation, and semi-supervised detection",
+    "100+ pretrained models including Faster R-CNN, Mask R-CNN, DETR, RTMDet, DINO, and Grounding DINO",
+    "High-efficiency GPU-accelerated bbox and mask operations",
+    "Flexible configuration system based on MMEngine",
+    "Rich data augmentation transforms pipeline",
+    "Built-in visualization and analysis tools",
+    "Support for COCO, LVIS, VOC, OpenImages, and custom datasets"
+  ],
+  "publicApiSurface": [
+    "mmdet.apis.DetInferencer",
+    "mmdet.apis.init_detector",
+    "mmdet.apis.inference_detector",
+    "mmdet.models.detectors (FasterRCNN, MaskRCNN, DETR, RTMDet, DINO, GroundingDINO, GLIP, etc.)",
+    "mmdet.models.backbones (ResNet, Swin, ConvNeXt, PVT, etc.)",
+    "mmdet.models.necks (FPN, PAFPN, etc.)",
+    "mmdet.models.dense_heads (RetinaHead, FCOSHead, etc.)",
+    "mmdet.models.roi_heads (StandardRoIHead, CascadeRoIHead, etc.)",
+    "mmdet.models.losses (FocalLoss, GIoULoss, DiceLoss, etc.)",
+    "mmdet.datasets (CocoDataset, VOCDataset, LVISDataset, etc.)",
+    "mmdet.evaluation (CocoMetric, VOCMetric, etc.)",
+    "tools/train.py",
+    "tools/test.py"
+  ]
+}

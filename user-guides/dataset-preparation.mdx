@@ -1,0 +1,210 @@
+---
+title: "Prepare datasets for MMDetection training"
+description: "Step-by-step instructions for downloading and structuring COCO, VOC, Cityscapes, and other datasets under the MMDetection data/ directory."
+keywords: ["mmdetection", "dataset", "coco", "voc", "cityscapes", "data preparation"]
+---
+
+MMDetection supports multiple public datasets including COCO, Pascal VOC, Cityscapes, and others listed under `configs/_base_/datasets`. The recommended convention is to place all datasets under a `data/` directory inside the MMDetection project root — either directly or via symlinks from an external storage location.
+
+<Note>
+For users in China, datasets can be downloaded from [OpenDataLab](https://opendatalab.com/) with higher speeds.
+</Note>
+
+---
+
+## COCO dataset
+
+<Steps>
+  <Step title="Download the COCO 2017 dataset">
+    Use the provided download script:
+
+    ```bash
+    python tools/misc/download_dataset.py --dataset-name coco2017
+    ```
+
+    Alternatively, download directly from [cocodataset.org](https://cocodataset.org/#download) and extract into `data/coco/`.
+  </Step>
+
+  <Step title="Verify the directory structure">
+    After extraction, your `data/coco/` directory should look like this:
+
+    ```text
+    mmdetection
+    ├── mmdet
+    ├── tools
+    ├── configs
+    ├── data
+    │   ├── coco
+    │   │   ├── annotations
+    │   │   ├── train2017
+    │   │   ├── val2017
+    │   │   ├── test2017
+    ```
+  </Step>
+</Steps>
+
+### COCO-stuff (for HTC, DetectoRS, SCNet)
+
+Some models require the [COCO-stuff](http://calvin.inf.ed.ac.uk/wp-content/uploads/data/cocostuffdataset/stuffthingmaps_trainval2017.zip) annotations. Download and unzip, then move the `stuffthingmaps` folder into `data/coco/`:
+
+```text
+mmdetection
+├── data
+│   ├── coco
+│   │   ├── annotations
+│   │   ├── train2017
+│   │   ├── val2017
+│   │   ├── test2017
+│   │   ├── stuffthingmaps
+```
+
+### COCO Panoptic (for PanopticFPN)
+
+Download the [COCO Panoptic annotations](http://images.cocodataset.org/annotations/panoptic_annotations_trainval2017.zip) and move them into `data/coco/annotations/`:
+
+```text
+mmdetection
+├── data
+│   ├── coco
+│   │   ├── annotations
+│   │   │   ├── panoptic_train2017.json
+│   │   │   ├── panoptic_train2017
+│   │   │   ├── panoptic_val2017.json
+│   │   │   ├── panoptic_val2017
+│   │   ├── train2017
+│   │   ├── val2017
+│   │   ├── test2017
+```
+
+---
+
+## Pascal VOC dataset
+
+<Note>
+Pascal VOC 2012 is an extension of Pascal VOC 2007 without overlap. They are typically used together in training.
+</Note>
+
+<Steps>
+  <Step title="Download via MIM from OpenDataLab">
+    ```bash
+    pip install -U openmim
+    pip install -U openxlab
+    openxlab login
+
+    # Download and preprocess both VOC splits
+    mim download mmdet --dataset voc2007
+    mim download mmdet --dataset voc2012
+    ```
+  </Step>
+
+  <Step title="Verify the directory structure">
+    ```text
+    mmdetection
+    ├── data
+    │   ├── VOCdevkit
+    │   │   ├── VOC2007
+    │   │   ├── VOC2012
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Cityscapes dataset
+
+<Steps>
+  <Step title="Download Cityscapes">
+    Download from [cityscapes-dataset.com](https://www.cityscapes-dataset.com/) and place under `data/cityscapes/`.
+  </Step>
+
+  <Step title="Install cityscapesscripts and convert annotations">
+    Cityscapes annotations must be converted to COCO format before use:
+
+    ```bash
+    pip install cityscapesscripts
+
+    python tools/dataset_converters/cityscapes.py \
+        ./data/cityscapes \
+        --nproc 8 \
+        --out-dir ./data/cityscapes/annotations
+    ```
+  </Step>
+
+  <Step title="Verify the directory structure">
+    ```text
+    mmdetection
+    ├── data
+    │   ├── cityscapes
+    │   │   ├── annotations
+    │   │   ├── leftImg8bit
+    │   │   │   ├── train
+    │   │   │   ├── val
+    │   │   ├── gtFine
+    │   │   │   ├── train
+    │   │   │   ├── val
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Downloading datasets via MIM (OpenDataLab)
+
+MIM supports one-command download and preprocessing for COCO and VOC from OpenDataLab:
+
+```bash
+pip install -U openmim
+pip install -U openxlab
+openxlab login
+
+mim download mmdet --dataset coco2017
+mim download mmdet --dataset voc2007
+mim download mmdet --dataset voc2012
+```
+
+<Warning>
+MIM version must be greater than v0.3.8. Run `pip install -U openmim` to upgrade.
+</Warning>
+
+---
+
+## Symlink convention
+
+It is recommended to store datasets outside the project directory and create a symlink:
+
+```bash
+# Example: datasets live at /data/public/
+ln -s /data/public/coco mmdetection/data/coco
+ln -s /data/public/VOCdevkit mmdetection/data/VOCdevkit
+```
+
+This keeps the project repository lightweight and lets multiple projects share the same dataset storage.
+
+---
+
+## Full expected data layout
+
+The complete `data/` layout for standard datasets looks like:
+
+```text
+mmdetection
+├── data
+│   ├── coco
+│   │   ├── annotations
+│   │   ├── train2017
+│   │   ├── val2017
+│   │   ├── test2017
+│   ├── cityscapes
+│   │   ├── annotations
+│   │   ├── leftImg8bit
+│   │   │   ├── train
+│   │   │   ├── val
+│   │   ├── gtFine
+│   │   │   ├── train
+│   │   │   ├── val
+│   ├── VOCdevkit
+│   │   ├── VOC2007
+│   │   ├── VOC2012
+```
+
+If your folder structure differs, update the corresponding `data_root` path in the config file you are using.

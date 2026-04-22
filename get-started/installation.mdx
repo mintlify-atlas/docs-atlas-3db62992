@@ -1,0 +1,216 @@
+---
+title: "Install MMDetection on Linux, Windows, and macOS"
+description: "Step-by-step guide to installing MMDetection with conda, PyTorch, MMEngine, MMCV, and optional Docker or Google Colab environments."
+keywords: ["mmdetection install", "mmcv", "mmengine", "mim", "conda", "pytorch", "cuda"]
+---
+
+MMDetection works on Linux, Windows, and macOS. It requires Python 3.7 or later, CUDA 9.2 or later, and PyTorch 1.8 or later. This guide walks you through a clean environment setup using conda and [MIM](https://github.com/open-mmlab/mim), OpenMMLab's package manager.
+
+<Note>
+  If you already have PyTorch installed in an active conda environment, skip to [Step 2](#step-2-install-mmengine-and-mmcv).
+</Note>
+
+## Prerequisites
+
+Before installing MMDetection, make sure you have:
+
+- [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or Anaconda installed
+- An NVIDIA GPU with an appropriate driver for CUDA 9.2+ (optional for CPU-only use)
+
+## Installation steps
+
+<Steps>
+  <Step title="Create a conda environment">
+    Create and activate a dedicated conda environment to keep your MMDetection installation isolated from other projects.
+
+    ```bash
+    conda create --name openmmlab python=3.8 -y
+    conda activate openmmlab
+    ```
+  </Step>
+
+  <Step title="Install PyTorch">
+    Install PyTorch using the official conda channel. Choose the variant that matches your hardware.
+
+    <Tabs>
+      <Tab title="GPU (recommended)">
+        ```bash
+        conda install pytorch torchvision -c pytorch
+        ```
+
+        For Ampere-based GPUs (GeForce 30 series, NVIDIA A100), CUDA 11 is required. For older GPUs, CUDA 10.2 is lighter and broadly compatible. Verify that your GPU driver version satisfies the minimum requirement in the [CUDA toolkit release notes](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html#cuda-major-component-versions__table-cuda-toolkit-driver-versions).
+      </Tab>
+      <Tab title="CPU only">
+        ```bash
+        conda install pytorch torchvision cpuonly -c pytorch
+        ```
+
+        CPU-only mode supports training (with MMCV ≥ 2.0.0rc1), testing, and inference. Some GPU-only operators are unavailable in CPU mode. See [CPU-only limitations](#cpu-only-limitations) for the full list.
+      </Tab>
+    </Tabs>
+
+    Follow the [official PyTorch instructions](https://pytorch.org/get-started/locally/) if you need to pin a specific CUDA version.
+  </Step>
+
+  <Step title="Install MMEngine and MMCV">
+    Use MIM to install [MMEngine](https://github.com/open-mmlab/mmengine) and [MMCV](https://github.com/open-mmlab/mmcv). MIM resolves the correct MMCV build for your PyTorch and CUDA versions automatically.
+
+    ```bash
+    pip install -U openmim
+    mim install mmengine
+    mim install "mmcv>=2.0.0"
+    ```
+
+    <Note>
+      In MMCV v2.x, `mmcv-full` was renamed to `mmcv`. If you want to install MMCV without compiled CUDA extensions, use `mim install "mmcv-lite>=2.0.0rc1"` instead.
+    </Note>
+  </Step>
+
+  <Step title="Install MMDetection">
+    Choose between a development install from source or a dependency install via MIM.
+
+    <Tabs>
+      <Tab title="From source (development)">
+        Install in editable mode if you plan to modify the MMDetection source code or run training scripts directly from the repository.
+
+        ```bash
+        git clone https://github.com/open-mmlab/mmdetection.git
+        cd mmdetection
+        pip install -v -e .
+        ```
+
+        The `-e` flag installs the package in editable mode — any changes you make to the source files take effect immediately without reinstalling.
+      </Tab>
+      <Tab title="Via MIM (as dependency)">
+        Install the latest stable release as a library if you are using MMDetection as a dependency in another project.
+
+        ```bash
+        mim install mmdet
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+## Verify the installation
+
+After installation, run a quick inference check to confirm everything is working.
+
+<Steps>
+  <Step title="Download a config and checkpoint">
+    Use MIM to fetch the RTMDet-tiny config and pre-trained weights.
+
+    ```bash
+    mim download mmdet --config rtmdet_tiny_8xb32-300e_coco --dest .
+    ```
+
+    This downloads two files to your current directory:
+    - `rtmdet_tiny_8xb32-300e_coco.py`
+    - `rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth`
+  </Step>
+
+  <Step title="Run inference">
+    <Tabs>
+      <Tab title="From source install">
+        ```bash
+        python demo/image_demo.py demo/demo.jpg \
+            rtmdet_tiny_8xb32-300e_coco.py \
+            --weights rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth \
+            --device cpu
+        ```
+
+        A new image is saved to `./outputs/vis/demo.jpg` with bounding boxes drawn over detected objects.
+      </Tab>
+      <Tab title="From MIM install">
+        ```python
+        from mmdet.apis import init_detector, inference_detector
+
+        config_file = 'rtmdet_tiny_8xb32-300e_coco.py'
+        checkpoint_file = 'rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth'
+        model = init_detector(config_file, checkpoint_file, device='cpu')
+        result = inference_detector(model, 'demo/demo.jpg')
+        ```
+
+        `result` is a `DetDataSample` object. Access predictions via `result.pred_instances`, which contains detected bounding boxes, class labels, and confidence scores.
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+## Optional installation methods
+
+### Docker
+
+MMDetection provides a Dockerfile to build a self-contained image. Docker version 19.03 or later is required.
+
+```bash
+# Build an image with PyTorch 1.9 and CUDA 11.1
+docker build -t mmdetection docker/
+```
+
+Run the container with GPU access and mount your data directory:
+
+```bash
+docker run --gpus all --shm-size=8g -it -v {DATA_DIR}:/mmdetection/data mmdetection
+```
+
+### Google Colab
+
+Google Colab includes PyTorch, so only MMEngine, MMCV, and MMDetection need to be installed.
+
+```python
+!pip3 install openmim
+!mim install mmengine
+!mim install "mmcv>=2.0.0,<2.1.0"
+!git clone https://github.com/open-mmlab/mmdetection.git
+%cd mmdetection
+!pip install -e .
+```
+
+Verify the install by printing the version:
+
+```python
+import mmdet
+print(mmdet.__version__)
+```
+
+## Customized installation
+
+### MMCV without MIM
+
+If you need to install a specific MMCV build manually, specify a find-url based on your PyTorch and CUDA versions. For example, MMCV for PyTorch 1.12 with CUDA 11.6:
+
+```bash
+pip install "mmcv>=2.0.0" -f https://download.openmmlab.com/mmcv/dist/cu116/torch1.12.0/index.html
+```
+
+See the [MMCV installation guide](https://mmcv.readthedocs.io/en/2.x/get_started/installation.html) for all available builds.
+
+### MMEngine without MIM
+
+```bash
+pip install mmengine
+```
+
+### CPU-only limitations
+
+In CPU-only mode, the following GPU-only operators are unavailable. Models that depend on them will raise an error at runtime.
+
+| Operator | Affected models |
+|---|---|
+| Deformable Convolution / Modulated Deformable Convolution | DCN, Guided Anchoring, RepPoints, CentripetalNet, VFNet, CascadeRPN, NAS-FCOS, DetectoRS |
+| MaskedConv2d | Guided Anchoring |
+| CARAFE | CARAFE |
+| SyncBatchNorm | ResNeSt |
+
+### Multiple MMDetection versions
+
+If you run training or testing scripts directly from the repository, the scripts prepend the repository root to `PYTHONPATH`. To use the system-installed MMDetection instead, remove the following line from the relevant script:
+
+```bash
+PYTHONPATH="$(dirname $0)/..":$PYTHONPATH
+```
+
+## Troubleshooting
+
+If you encounter issues during installation, consult the [FAQ](https://mmdetection.readthedocs.io/en/latest/notes/faq.html) or [open an issue](https://github.com/open-mmlab/mmdetection/issues/new/choose) on GitHub.

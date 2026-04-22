@@ -1,122 +1,82 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "MMDetection",
+  "theme": "palm",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#5d6c75",
+    "light": "#b5bec1",
+    "dark": "#2e7fc0"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "https://media.brand.dev/94c1ff8b-1d9e-4f37-b720-7bf7533aff58.png",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/open-mmlab/mmdetection"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/open-mmlab/mmdetection"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "get-started/installation",
+              "get-started/quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "User Guides",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "user-guides/configuration",
+              "user-guides/dataset-preparation",
+              "user-guides/train",
+              "user-guides/inference",
+              "user-guides/visualization",
+              "user-guides/useful-tools"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Advanced Guides",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "advanced-guides/customize-models",
+              "advanced-guides/customize-dataset",
+              "advanced-guides/customize-transforms",
+              "advanced-guides/customize-losses",
+              "advanced-guides/data-flow"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Model Zoo",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "model-zoo/overview",
+              "model-zoo/detection-models",
+              "model-zoo/segmentation-models"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Core APIs",
             "pages": [
-              "api-reference/introduction"
-            ]
-          },
-          {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/det-inferencer",
+              "api/models",
+              "api/datasets",
+              "api/evaluation"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

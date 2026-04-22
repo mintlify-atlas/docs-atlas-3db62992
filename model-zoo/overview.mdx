@@ -1,0 +1,101 @@
+---
+title: 'Model Zoo overview and benchmarking settings'
+description: 'Browse 300+ pretrained MMDetection models, understand benchmark settings, download weights with mim, and cite the toolbox correctly.'
+keywords: ['model zoo', 'pretrained models', 'COCO benchmark', 'mim download', 'ImageNet backbone', 'mmdetection']
+---
+
+MMDetection ships a large collection of pretrained models spanning object detection, instance segmentation, and panoptic segmentation. Every model in the zoo was evaluated under the same conditions so you can make fair comparisons across architectures. This page explains the common benchmark settings, shows you how to download any model with a single command, and lists the ImageNet-pretrained backbones used as starting points for fine-tuning.
+
+## Common benchmark settings
+
+All models in the zoo share a consistent evaluation protocol.
+
+- **Training split**: `coco_2017_train`
+- **Validation split**: `coco_2017_val`
+- **Training strategy**: distributed training across 8 GPUs
+- **Backbone initialization**: PyTorch-style (TorchVision) or Caffe-style (converted from Detectron2) ImageNet pretrained weights, depending on the model family
+- **GPU memory reporting**: maximum `torch.cuda.max_memory_allocated()` across all 8 GPUs — typically lower than `nvidia-smi` output
+- **Inference time**: total forwarding + post-processing time, averaged over 2000 images using [`benchmark.py`](https://github.com/open-mmlab/mmdetection/blob/main/tools/analysis_tools/benchmark.py), excluding data loading
+
+<Note>
+Inference latency figures in the model zoo are measured **without** `--fuse-conv-bn`. Passing that flag at test time will reduce latency further.
+</Note>
+
+## Downloading models with `mim`
+
+MIM is the recommended way to fetch any checkpoint from the model zoo without writing download scripts.
+
+```bash
+# Install MIM
+pip install openmim
+
+# Download a Faster R-CNN R-50 FPN 1x checkpoint
+mim download mmdet --config faster-rcnn_r50_fpn_1x_coco --dest ./checkpoints
+
+# Download an RTMDet-L checkpoint
+mim download mmdet --config rtmdet_l_8xb32-300e_coco --dest ./checkpoints
+```
+
+`mim download` resolves the config name to the correct checkpoint URL from the model zoo and saves it to the directory you specify.
+
+<Tip>
+You can list all available configs for a package with `mim search mmdet`. Pipe the output through `grep` to filter by architecture.
+</Tip>
+
+## ImageNet pretrained backbones
+
+MMDetection models are initialised from one of the following backbone weight sources. The source determines the image normalisation parameters that must match in your config.
+
+| Backbone | Source | Normalisation (`mean` / `std`) | Notes |
+|---|---|---|---|
+| ResNet-50 | TorchVision | `[123.675, 116.28, 103.53]` / `[58.395, 57.12, 57.375]`, RGB | Standard PyTorch model zoo |
+| ResNet-101 | TorchVision | `[123.675, 116.28, 103.53]` / `[58.395, 57.12, 57.375]`, RGB | Standard PyTorch model zoo |
+| RegNetX | Pycls (Facebook) | `[103.530, 116.280, 123.675]` / `[57.375, 57.12, 58.395]`, BGR | Covers RegNetX-800MF, 3.2GF, etc. |
+| ResNet-50 (Caffe) | MSRA via Detectron2 | `[103.530, 116.280, 123.675]` / `[1.0, 1.0, 1.0]`, BGR | Converted R-50 pkl |
+| ResNet-101 (Caffe) | MSRA via Detectron2 | `[103.530, 116.280, 123.675]` / `[1.0, 1.0, 1.0]`, BGR | Converted R-101 pkl |
+| ResNeXt-101-32x8d | Caffe2 (Facebook) | `[103.530, 116.280, 123.675]` / `[57.375, 57.120, 58.395]`, BGR | Converted X-101-32x8d pkl |
+
+<Note>
+Using a backbone weight from the wrong source (for example, a TorchVision checkpoint with Caffe-style normalisation in your config) is one of the most common sources of accuracy regression. Always check `img_norm_cfg` in your base config.
+</Note>
+
+## Comparison with Detectron2
+
+MMDetection matches or exceeds Detectron2 on the three baseline models tested under the same hardware (8× NVIDIA Tesla V100 32 GB).
+
+| Model | Schedule | Detectron2 box AP | MMDetection box AP |
+|---|---|---|---|
+| Faster R-CNN R-50 FPN | 1x | 37.9 | 38.0 |
+| Mask R-CNN R-50 FPN | 1x | 38.6 / 35.2 | 38.8 / 35.4 |
+| RetinaNet R-50 FPN | 1x | 36.5 | 37.0 |
+
+Training throughput (Mask R-CNN R-50 FPN, img/s): MMDetection **61**, Detectron2 62, maskrcnn-benchmark 53.
+
+## Model families
+
+<CardGroup cols={2}>
+  <Card title="Object detection models" icon="crosshairs" href="/model-zoo/detection-models">
+    Two-stage, one-stage, transformer-based, and open-vocabulary detectors including Faster R-CNN, RTMDet, DINO, and Grounding DINO.
+  </Card>
+  <Card title="Segmentation models" icon="shapes" href="/model-zoo/segmentation-models">
+    Instance and panoptic segmentation models including Mask R-CNN, SOLOv2, CondInst, and Mask2Former.
+  </Card>
+</CardGroup>
+
+## Citing MMDetection
+
+If you use any model from the zoo in your research, please cite the MMDetection paper.
+
+```bibtex
+@article{mmdetection,
+  title   = {{MMDetection}: Open MMLab Detection Toolbox and Benchmark},
+  author  = {Chen, Kai and Wang, Jiaqi and Pang, Jiangmiao and Cao, Yuhang and
+             Xiong, Yu and Li, Xiaoxiao and Sun, Shuyang and Feng, Wansen and
+             Liu, Ziwei and Xu, Jiarui and Zhang, Zheng and Cheng, Dazhi and
+             Zhu, Chenchen and Cheng, Tianheng and Zhao, Qijie and Li, Buyu and
+             Lu, Xin and Zhu, Rui and Wu, Yue and Dai, Jifeng and Wang, Jingdong
+             and Shi, Jianping and Ouyang, Wanli and Loy, Chen Change and Lin, Dahua},
+  journal = {arXiv preprint arXiv:1906.07155},
+  year    = {2019}
+}
+```

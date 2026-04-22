@@ -1,0 +1,198 @@
+---
+title: 'Pretrained object detection models in MMDetection'
+description: 'Explore two-stage, one-stage, transformer, and open-vocabulary detectors with config names, benchmark results, and inference commands.'
+keywords: ['object detection', 'Faster R-CNN', 'RTMDet', 'DINO', 'DETR', 'YOLOX', 'FCOS', 'Grounding DINO', 'mmdetection']
+---
+
+MMDetection provides pretrained checkpoints for more than 40 object detection architectures, ranging from classic two-stage detectors to the latest transformer-based and open-vocabulary models. All checkpoints are trained on COCO 2017 train and evaluated on COCO 2017 val under the same distributed training setup. The sections below group models by architectural family, give a brief description of each approach, and list a representative config file name you can use with `mim download`.
+
+## Architectures by category
+
+<Tabs>
+  <Tab title="Two-stage">
+
+Two-stage detectors use a region proposal network (RPN) to generate candidate boxes before classifying and refining them in a second stage. They generally achieve higher accuracy than one-stage methods at the cost of additional compute.
+
+### Faster R-CNN
+
+Faster R-CNN (NeurIPS 2015) introduced the RPN, making end-to-end trainable two-stage detection practical. It remains a widely used baseline for benchmarking new components.
+
+| Config | Backbone | Schedule | Box AP |
+|---|---|---|---|
+| `faster-rcnn_r50_fpn_1x_coco` | ResNet-50 FPN | 1x | 37.4 |
+| `faster-rcnn_r50_fpn_2x_coco` | ResNet-50 FPN | 2x | 38.4 |
+| `faster-rcnn_r101_fpn_1x_coco` | ResNet-101 FPN | 1x | 39.4 |
+| `faster-rcnn_x101-64x4d_fpn_1x_coco` | ResNeXt-101-64x4d FPN | 1x | 41.4 |
+
+### Cascade R-CNN
+
+Cascade R-CNN (CVPR 2018) chains multiple detection heads at increasing IoU thresholds. Each stage refines the proposals from the previous one, reducing close false positives significantly.
+
+Representative config: `cascade-rcnn_r50_fpn_1x_coco`
+
+### Sparse R-CNN
+
+Sparse R-CNN (CVPR 2021) replaces dense proposals with a fixed set of learned object queries, removing anchors and NMS entirely while matching two-stage accuracy.
+
+Representative config: `sparse-rcnn_r50_fpn_1x_coco`
+
+  </Tab>
+  <Tab title="One-stage">
+
+One-stage detectors predict boxes and classes in a single forward pass without a separate proposal step. They trade some accuracy for faster inference.
+
+### RetinaNet
+
+RetinaNet (ICCV 2017) introduced focal loss to address the foreground–background class imbalance inherent in dense anchor-based detection.
+
+| Config | Backbone | Schedule | Box AP |
+|---|---|---|---|
+| `retinanet_r50_fpn_1x_coco` | ResNet-50 FPN | 1x | 36.5 |
+| `retinanet_r101_fpn_1x_coco` | ResNet-101 FPN | 1x | 38.5 |
+
+### FCOS
+
+FCOS (ICCV 2019) is an anchor-free, fully convolutional detector that predicts box offsets directly from per-pixel feature maps, eliminating anchor design choices.
+
+Representative config: `fcos_r50-caffe_fpn_gn-head_1x_coco`
+
+### SSD
+
+SSD (ECCV 2016) is an early single-shot multi-scale detector that remains a practical baseline for embedded and mobile deployments.
+
+Representative config: `ssd300_coco`
+
+### YOLOX
+
+YOLOX (ICCV 2021 workshop) adapts the YOLO series with an anchor-free design, decoupled head, and SimOTA label assignment, achieving strong speed–accuracy trade-offs.
+
+Representative config: `yolox_s_8xb8-300e_coco`
+
+### RTMDet
+
+RTMDet (ArXiv 2022) is a family of fully convolutional single-stage detectors optimised for real-time performance across tiny-to-extra-large model sizes. It achieves state-of-the-art results on COCO at each parameter budget.
+
+| Config | Backbone | Box AP | FPS (TRT FP16 BS1) |
+|---|---|---|---|
+| `rtmdet_tiny_8xb32-300e_coco` | CSPNeXt-T | 40.9 | — |
+| `rtmdet_s_8xb32-300e_coco` | CSPNeXt-S | 44.5 | — |
+| `rtmdet_m_8xb32-300e_coco` | CSPNeXt-M | 49.3 | — |
+| `rtmdet_l_8xb32-300e_coco` | CSPNeXt-L | 51.3 | — |
+| `rtmdet_x_8xb32-300e_coco` | CSPNeXt-X | 52.8 | 322 |
+
+  </Tab>
+  <Tab title="Transformer-based">
+
+Transformer-based detectors apply self-attention over image features or object queries and have closed the gap with two-stage CNN methods while enabling richer context modelling.
+
+### DETR
+
+DETR (ECCV 2020) was the first end-to-end object detector to replace anchors and NMS with a set prediction loss over learned object queries processed by a transformer encoder–decoder.
+
+Representative config: `detr_r50_8xb2-150e_coco`
+
+### Deformable DETR
+
+Deformable DETR (ICLR 2021) replaces global attention with deformable attention that attends to a small set of key points, reducing training time to convergence from 500 to 50 epochs while improving accuracy.
+
+Representative config: `deformable-detr_r50_16xb2-50e_coco`
+
+### DAB-DETR
+
+DAB-DETR (ICLR 2022) reformulates object queries as dynamic anchor boxes, providing explicit positional information that improves convergence and localisation.
+
+Representative config: `dab-detr_r50_8xb2-50e_coco`
+
+### DINO
+
+DINO (ICLR 2023) extends Deformable DETR with contrastive denoising training, mixed query selection, and a look-forward twice scheme. It is one of the strongest end-to-end detection models on COCO.
+
+| Config | Backbone | Schedule | Box AP |
+|---|---|---|---|
+| `dino-4scale_r50_8xb2-12e_coco` | ResNet-50 | 12e | 49.0 |
+| `dino-4scale_r50_8xb2-24e_coco` | ResNet-50 | 24e | 50.4 |
+| `dino-4scale_r50_8xb2-36e_coco` | ResNet-50 | 36e | 50.9 |
+| `dino-5scale_swin-l_8xb2-36e_coco` | Swin-L | 36e | 58.4 |
+
+  </Tab>
+  <Tab title="Open-vocabulary">
+
+Open-vocabulary detectors are grounding-pretrained models that can detect arbitrary categories described in natural language, going beyond the fixed 80-class COCO vocabulary.
+
+### GLIP
+
+GLIP (CVPR 2022) unifies object detection and phrase grounding by formulating detection as a language-guided grounding task. It enables zero-shot transfer to novel categories.
+
+Representative config: `glip_atss_swin-t_a_fpn_dyhead_pretrain_obj365`
+
+### Grounding DINO
+
+Grounding DINO combines DINO with grounded pre-training on large-scale image–text pairs. It achieves state-of-the-art zero-shot and few-shot detection performance.
+
+Representative config: `grounding_dino_swin-t_pretrain_obj365_goldg_cap4m`
+
+### MM-Grounding-DINO
+
+MM-Grounding-DINO is OpenMMLab's open-source reproduction and extension of Grounding DINO. It adds improved data curation, additional dataset combinations, and comprehensive multi-task evaluations (OVD, REC, phrase grounding, OOD, and fine-tuning).
+
+Representative config: `mm_grounding_dino_swin-b_pretrain_obj365_goldg_v3det`
+
+  </Tab>
+</Tabs>
+
+## Downloading a detection model
+
+Use `mim download` to fetch any checkpoint by its config name.
+
+```bash
+# Install MIM if you haven't already
+pip install openmim
+
+# Download Faster R-CNN R-50 FPN 1x
+mim download mmdet --config faster-rcnn_r50_fpn_1x_coco --dest ./checkpoints
+
+# Download RTMDet-L
+mim download mmdet --config rtmdet_l_8xb32-300e_coco --dest ./checkpoints
+
+# Download DINO 4-scale R-50 12e
+mim download mmdet --config dino-4scale_r50_8xb2-12e_coco --dest ./checkpoints
+```
+
+## Running inference
+
+Once you have the config and checkpoint, run inference with `demo/image_demo.py`.
+
+```bash
+python demo/image_demo.py \
+    demo/demo.jpg \
+    configs/faster_rcnn/faster-rcnn_r50_fpn_1x_coco.py \
+    --weights checkpoints/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth \
+    --out-dir outputs/
+```
+
+For RTMDet the command is identical — just swap the config and checkpoint paths.
+
+```bash
+python demo/image_demo.py \
+    demo/demo.jpg \
+    configs/rtmdet/rtmdet_l_8xb32-300e_coco.py \
+    --weights checkpoints/rtmdet_l_8xb32-300e_coco_20220719_112030-5a0be7c4.pth \
+    --out-dir outputs/
+```
+
+<Tip>
+Add `--device cpu` if you are running on a machine without a GPU. For video inference, replace `demo/image_demo.py` with `demo/video_demo.py` and pass `--video` instead of an image path.
+</Tip>
+
+## Benchmarking inference speed
+
+Use the `benchmark.py` analysis script to measure throughput on your hardware.
+
+```bash
+python tools/analysis_tools/benchmark.py \
+    configs/faster_rcnn/faster-rcnn_r50_fpn_1x_coco.py \
+    checkpoints/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth \
+    --log-interval 50
+```
+
+Pass `--fuse-conv-bn` to enable conv–BN fusion, which reduces inference latency at the cost of a slightly longer warm-up.

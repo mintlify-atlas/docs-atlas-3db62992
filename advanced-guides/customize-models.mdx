@@ -1,0 +1,306 @@
+---
+title: "Customize backbones, necks, and heads in MMDetection"
+description: "Learn how to add custom backbones, necks, and detection heads to MMDetection using the MODELS registry system and config inheritance."
+keywords: ["custom backbone", "custom neck", "custom head", "registry", "MODELS", "MMDetection"]
+---
+
+MMDetection organizes model components into five categories: backbones, necks, heads, RoI extractors, and losses. Each component is registered in a central registry so that any config file can instantiate it by name. This guide walks through adding your own backbone, neck, and head, then wiring them into a config.
+
+## How the registry system works
+
+MMDetection uses the `MODELS` registry from `mmdet.registry`. Decorating a class with `@MODELS.register_module()` makes it available by its class name in any config. The config system calls `MODELS.build(cfg)` at runtime, so no manual instantiation is needed.
+
+Two import strategies are available:
+
+<Tabs>
+  <Tab title="Edit __init__.py">
+    Add your class to the relevant `__init__.py` file so it is always imported when MMDetection loads:
+
+    ```python mmdet/models/backbones/__init__.py
+    from .mobilenet import MobileNet
+    ```
+  </Tab>
+  <Tab title="custom_imports in config">
+    Add a `custom_imports` block to your config. This avoids modifying the source tree and is useful for external projects:
+
+    ```python my_config.py
+    custom_imports = dict(
+        imports=['mmdet.models.backbones.mobilenet'],
+        allow_failed_imports=False)
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+Built-in backbones include `ResNet`, `ResNeXt`, `MobileNetV2`, `SwinTransformer`, `CSPDarknet`, `EfficientNet`, `HRNet`, and more. Built-in necks include `FPN`, `PAFPN`, `BFP`, `NASFPN`, `DyHead`, and others. Check `mmdet/models/backbones/__init__.py` and `mmdet/models/necks/__init__.py` for the full list.
+</Note>
+
+## Add a custom backbone
+
+<Steps>
+  <Step title="Define the backbone class">
+    Create `mmdet/models/backbones/mobilenet.py`. The class must extend `nn.Module` and its `forward` method must return a tuple of feature maps (one per output stage).
+
+    ```python mmdet/models/backbones/mobilenet.py
+    import torch.nn as nn
+
+    from mmdet.registry import MODELS
+
+
+    @MODELS.register_module()
+    class MobileNet(nn.Module):
+
+        def __init__(self, arg1, arg2):
+            super().__init__()
+            # build layers here
+
+        def forward(self, x):  # must return a tuple
+            # return (stage2_feat, stage3_feat, stage4_feat)
+            pass
+    ```
+  </Step>
+
+  <Step title="Register the module">
+    Choose one of the two import strategies described above. The simplest approach for in-tree development is to add the import to `mmdet/models/backbones/__init__.py`:
+
+    ```python mmdet/models/backbones/__init__.py
+    from .mobilenet import MobileNet
+    ```
+  </Step>
+
+  <Step title="Use the backbone in a config">
+    Reference the backbone by its registered name in the `model.backbone` field:
+
+    ```python configs/my_config.py
+    model = dict(
+        type='FasterRCNN',
+        backbone=dict(
+            type='MobileNet',
+            arg1=xxx,
+            arg2=xxx),
+        ...
+    )
+    ```
+  </Step>
+</Steps>
+
+## Add a custom neck
+
+Necks sit between the backbone and the head, aggregating multi-scale feature maps. FPN and PAFPN are common examples.
+
+<Steps>
+  <Step title="Define the neck class">
+    Create `mmdet/models/necks/pafpn.py`. The `forward` method receives a tuple of backbone feature maps and returns a tuple of aggregated maps.
+
+    ```python mmdet/models/necks/pafpn.py
+    import torch.nn as nn
+
+    from mmdet.registry import MODELS
+
+
+    @MODELS.register_module()
+    class PAFPN(nn.Module):
+
+        def __init__(self,
+                     in_channels,
+                     out_channels,
+                     num_outs,
+                     start_level=0,
+                     end_level=-1,
+                     add_extra_convs=False):
+            super().__init__()
+            # build layers here
+
+        def forward(self, inputs):
+            # inputs: tuple of backbone feature maps
+            # return: tuple of neck output feature maps
+            pass
+    ```
+  </Step>
+
+  <Step title="Register the module">
+    Add an import to `mmdet/models/necks/__init__.py` or use `custom_imports` in the config.
+  </Step>
+
+  <Step title="Use the neck in a config">
+    ```python configs/my_config.py
+    model = dict(
+        ...
+        neck=dict(
+            type='PAFPN',
+            in_channels=[256, 512, 1024, 2048],
+            out_channels=256,
+            num_outs=5),
+        ...
+    )
+    ```
+  </Step>
+</Steps>
+
+## Add a custom detection head
+
+The following example is based on the Double Head R-CNN implementation, which adds a dedicated convolutional branch for classification and a separate fully-connected branch for regression.
+
+<Steps>
+  <Step title="Implement the bbox head">
+    Create `mmdet/models/roi_heads/bbox_heads/double_bbox_head.py`. Subclass the built-in `BBoxHead` and override `forward`:
+
+    ```python mmdet/models/roi_heads/bbox_heads/double_bbox_head.py
+    from typing import Tuple
+
+    import torch.nn as nn
+    from mmengine.model import BaseModule
+    from torch import Tensor
+
+    from mmdet.registry import MODELS
+    from mmdet.utils import ConfigType, OptConfigType
+    from .bbox_head import BBoxHead
+
+
+    @MODELS.register_module()
+    class DoubleConvFCBBoxHead(BBoxHead):
+        """Bbox head for Double-Head R-CNN.
+
+        Uses separate conv and FC branches for cls/reg.
+        """
+
+        def __init__(self,
+                     num_convs: int = 0,
+                     num_fcs: int = 0,
+                     conv_out_channels: int = 1024,
+                     fc_out_channels: int = 1024,
+                     conv_cfg: OptConfigType = None,
+                     norm_cfg: ConfigType = dict(type='BN'),
+                     **kwargs) -> None:
+            kwargs.setdefault('with_avg_pool', True)
+            super().__init__(**kwargs)
+            # build conv branch and fc branch here
+
+        def forward(self, x_cls: Tensor, x_reg: Tensor) -> Tuple[Tensor]:
+            # return (cls_score, bbox_pred)
+            pass
+    ```
+  </Step>
+
+  <Step title="Implement the RoI head">
+    Create `mmdet/models/roi_heads/double_roi_head.py`. Inherit from `StandardRoIHead` and override only the parts that differ — in this case `_bbox_forward`:
+
+    ```python mmdet/models/roi_heads/double_roi_head.py
+    from typing import Tuple
+
+    from torch import Tensor
+
+    from mmdet.registry import MODELS
+    from .standard_roi_head import StandardRoIHead
+
+
+    @MODELS.register_module()
+    class DoubleHeadRoIHead(StandardRoIHead):
+        """RoI head for Double Head R-CNN."""
+
+        def __init__(self, reg_roi_scale_factor: float, **kwargs):
+            super().__init__(**kwargs)
+            self.reg_roi_scale_factor = reg_roi_scale_factor
+
+        def _bbox_forward(self, x: Tuple[Tensor], rois: Tensor) -> dict:
+            bbox_cls_feats = self.bbox_roi_extractor(
+                x[:self.bbox_roi_extractor.num_inputs], rois)
+            bbox_reg_feats = self.bbox_roi_extractor(
+                x[:self.bbox_roi_extractor.num_inputs],
+                rois,
+                roi_scale_factor=self.reg_roi_scale_factor)
+
+            cls_score, bbox_pred = self.bbox_head(
+                bbox_cls_feats, bbox_reg_feats)
+
+            return dict(
+                cls_score=cls_score,
+                bbox_pred=bbox_pred,
+                bbox_feats=bbox_cls_feats)
+    ```
+  </Step>
+
+  <Step title="Register both modules">
+    Add imports to the relevant `__init__.py` files, or use `custom_imports` in the config:
+
+    ```python configs/my_config.py
+    custom_imports = dict(
+        imports=[
+            'mmdet.models.roi_heads.double_roi_head',
+            'mmdet.models.roi_heads.bbox_heads.double_bbox_head',
+        ])
+    ```
+  </Step>
+
+  <Step title="Wire the head in a config">
+    Inherit from a base config and override only the changed fields. Use `_delete_=True` to replace a nested dict entirely:
+
+    ```python configs/double_head_r50_fpn_1x_coco.py
+    _base_ = '../faster_rcnn/faster-rcnn_r50_fpn_1x_coco.py'
+
+    model = dict(
+        roi_head=dict(
+            type='DoubleHeadRoIHead',
+            reg_roi_scale_factor=1.3,
+            bbox_head=dict(
+                _delete_=True,
+                type='DoubleConvFCBBoxHead',
+                num_convs=4,
+                num_fcs=2,
+                in_channels=256,
+                conv_out_channels=1024,
+                fc_out_channels=1024,
+                roi_feat_size=7,
+                num_classes=80,
+                bbox_coder=dict(
+                    type='DeltaXYWHBBoxCoder',
+                    target_means=[0., 0., 0., 0.],
+                    target_stds=[0.1, 0.1, 0.2, 0.2]),
+                reg_class_agnostic=False,
+                loss_cls=dict(
+                    type='CrossEntropyLoss',
+                    use_sigmoid=False,
+                    loss_weight=2.0),
+                loss_bbox=dict(
+                    type='SmoothL1Loss',
+                    beta=1.0,
+                    loss_weight=2.0))))
+    ```
+  </Step>
+</Steps>
+
+## Modify an existing module
+
+You do not need to create an entirely new class to change a module's behavior. For small changes — different hyperparameters, a different loss, or a replaced sub-module — override only the relevant fields in the config using `_delete_=True`:
+
+```python configs/modified_retinanet.py
+_base_ = './retinanet_r50_fpn_1x_coco.py'
+
+model = dict(
+    bbox_head=dict(
+        loss_cls=dict(
+            _delete_=True,
+            type='FocalLoss',
+            use_sigmoid=True,
+            gamma=1.5,
+            alpha=0.5,
+            loss_weight=1.0)))
+```
+
+<Tip>
+The `_delete_=True` key tells the config system to replace the entire nested dict rather than merge it. Use it whenever a sub-config has fields that should not carry over from the base.
+</Tip>
+
+## Component type reference
+
+<AccordionGroup>
+  <Accordion title="Built-in backbones">
+    `ResNet`, `ResNetV1d`, `ResNeXt`, `MobileNetV2`, `HRNet`, `Res2Net`, `ResNeSt`, `SwinTransformer`, `CSPDarknet`, `CSPNeXt`, `EfficientNet`, `PyramidVisionTransformer`, `PyramidVisionTransformerV2`, `HourglassNet`, `SSDVGG`, `TridentResNet`, `DetectoRS_ResNet`, `DetectoRS_ResNeXt`, `Darknet`
+  </Accordion>
+  <Accordion title="Built-in necks">
+    `FPN`, `PAFPN`, `BFP`, `ChannelMapper`, `HRFPN`, `NASFPN`, `FPN_CARAFE`, `NASFCOS_FPN`, `RFP`, `YOLOV3Neck`, `FPG`, `DilatedEncoder`, `CTResNetNeck`, `SSDNeck`, `YOLOXPAFPN`, `DyHead`, `CSPNeXtPAFPN`, `SSH`, `FPN_DropBlock`
+  </Accordion>
+  <Accordion title="Built-in dense heads">
+    `RPNHead`, `RetinaHead`, `FCOSHead`, `ATSSHead`, `GFLHead`, `TOODHead`, `DETRHead`, `DeformableDETRHead`, `DINOHead`, `RTMDetHead`, `YOLOXHead`, `SSDHead`, `CenterNetHead`, `SOLOHead`, `Mask2FormerHead`, and many more. See `mmdet/models/dense_heads/__init__.py` for the complete list.
+  </Accordion>
+</AccordionGroup>

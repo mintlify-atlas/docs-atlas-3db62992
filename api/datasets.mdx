@@ -1,0 +1,298 @@
+---
+title: 'Dataset classes and data pipeline in MMDetection'
+description: 'Reference for CocoDataset, VOCDataset, LVISDataset and other dataset classes, the BaseDetDataset interface, transforms, and DetDataSample structures.'
+keywords: ['datasets', 'CocoDataset', 'VOCDataset', 'LVISDataset', 'BaseDetDataset', 'DetDataSample', 'data pipeline', 'transforms']
+---
+
+MMDetection datasets are registered in the `DATASETS` registry and follow a consistent interface defined by `BaseDetDataset`. All dataset classes produce a list of `data_info` dicts, which flow through a configurable transform pipeline before being packed into `DetDataSample` objects that the model consumes.
+
+## Available dataset classes
+
+The classes below are exported from `mmdet.datasets`.
+
+<Tabs>
+  <Tab title="Detection">
+    | Class | Format | Notes |
+    |---|---|---|
+    | `CocoDataset` | COCO JSON | 80-class COCO detection benchmark |
+    | `CocoPanopticDataset` | COCO panoptic JSON | Panoptic segmentation |
+    | `CocoSegDataset` | COCO JSON | Semantic segmentation via COCO format |
+    | `CocoCaptionDataset` | COCO caption JSON | Image captioning tasks |
+    | `VOCDataset` | Pascal VOC XML | Wraps `XMLDataset`; VOC 2007/2012 |
+    | `XMLDataset` | VOC-style XML | Base for XML-format datasets |
+    | `LVISDataset` | LVIS JSON | Large vocabulary instance segmentation |
+    | `LVISV05Dataset` | LVIS JSON | LVIS v0.5 variant |
+    | `LVISV1Dataset` | LVIS JSON | LVIS v1.0 variant |
+    | `CityscapesDataset` | Cityscapes | Instance segmentation on street scenes |
+    | `CrowdHumanDataset` | CrowdHuman JSON | Crowded pedestrian detection |
+    | `OpenImagesDataset` | Open Images CSV | Google Open Images V6 |
+    | `OpenImagesChallengeDataset` | Open Images CSV | Open Images Challenge format |
+    | `Objects365V1Dataset` | Objects365 JSON | Objects365 v1 |
+    | `Objects365V2Dataset` | Objects365 JSON | Objects365 v2 |
+    | `V3DetDataset` | V3Det JSON | V3Det large-vocabulary dataset |
+    | `DSDLDetDataset` | DSDL | Dataset description language format |
+    | `WIDERFaceDataset` | WIDER Face | Face detection |
+    | `DeepFashionDataset` | DeepFashion | Fashion landmark and category |
+    | `iSAIDDataset` | iSAID | Instance segmentation in aerial images |
+  </Tab>
+  <Tab title="Grounding & referring">
+    | Class | Notes |
+    |---|---|
+    | `RefCocoDataset` | RefCOCO/RefCOCO+/RefCOCOg referring expression |
+    | `MDETRStyleRefCocoDataset` | MDETR-style referring expression |
+    | `ODVGDataset` | Open-domain visual grounding |
+    | `DODDataset` | Described object detection |
+    | `Flickr30kDataset` | Flickr30k entities |
+  </Tab>
+  <Tab title="Video & tracking">
+    | Class | Notes |
+    |---|---|
+    | `BaseVideoDataset` | Base class for video datasets |
+    | `MOTChallengeDataset` | MOT17/MOT20 multi-object tracking |
+    | `YouTubeVISDataset` | YouTube-VIS video instance segmentation |
+    | `ReIDDataset` | Person re-identification |
+  </Tab>
+  <Tab title="ADE20K & other">
+    | Class | Notes |
+    |---|---|
+    | `ADE20KInstanceDataset` | ADE20K instance segmentation |
+    | `ADE20KPanopticDataset` | ADE20K panoptic segmentation |
+    | `ADE20KSegDataset` | ADE20K semantic segmentation |
+    | `BaseSegDataset` | Generic semantic segmentation base |
+  </Tab>
+</Tabs>
+
+### Dataset wrappers
+
+| Class | Notes |
+|---|---|
+| `ConcatDataset` | Concatenate multiple datasets |
+| `MultiImageMixDataset` | Apply mix augmentations (Mosaic, MixUp) across images |
+
+---
+
+## BaseDetDataset interface
+
+`mmdet.datasets.BaseDetDataset` extends `mmengine.dataset.BaseDataset` and is the base for all detection dataset classes.
+
+### Constructor parameters
+
+<ParamField path="ann_file" type="str" required>
+  Path to the annotation file relative to `data_root`, or an absolute path.
+</ParamField>
+
+<ParamField path="data_root" type="str" default="">
+  Root directory prepended to `ann_file`, `data_prefix`, and `proposal_file` when those paths are relative.
+</ParamField>
+
+<ParamField path="data_prefix" type="dict" default="{}">
+  Mapping of field name to path prefix, e.g. `dict(img='images/')`. Applied to image paths in `data_info` dicts.
+</ParamField>
+
+<ParamField path="pipeline" type="list[dict]" required>
+  List of transform configs applied sequentially to each sample.
+</ParamField>
+
+<ParamField path="filter_cfg" type="dict" default="None">
+  Filtering rules such as `dict(filter_empty_gt=True, min_size=32)`.
+</ParamField>
+
+<ParamField path="proposal_file" type="str" default="None">
+  Optional path to a pre-computed proposals file used in two-stage training.
+</ParamField>
+
+<ParamField path="backend_args" type="dict" default="None">
+  Arguments forwarded to the mmengine file backend (e.g. for loading from S3).
+</ParamField>
+
+<ParamField path="lazy_init" type="bool" default="False">
+  Defer `full_init` until the first access. Useful when you only need `metainfo`.
+</ParamField>
+
+<ParamField path="return_classes" type="bool" default="False">
+  Include the class list in each `data_info` dict for open-vocabulary models.
+</ParamField>
+
+### Key methods
+
+`load_data_list() → list[dict]`
+Parses the annotation file and returns a flat list of `data_info` dicts. Each dict contains at minimum `img_path` and `instances` (a list of per-instance annotation dicts).
+
+`get_data_info(idx: int) → dict`
+Returns the raw `data_info` dict for a given index before the pipeline is applied.
+
+`__getitem__(idx: int) → dict`
+Applies the full transform pipeline to `get_data_info(idx)` and returns the packed data dict ready for collation.
+
+`get_cat_ids(idx: int) → list[int]`
+Returns the list of category IDs present in image `idx`.
+
+### `data_info` dict structure
+
+```python
+{
+    'img_path': 'data/coco/train2017/000000000001.jpg',
+    'height': 480,
+    'width': 640,
+    'instances': [
+        {
+            'bbox': [x1, y1, x2, y2],     # float, xyxy format
+            'bbox_label': 0,               # int, 0-indexed
+            'mask': [...],                 # polygon or RLE (optional)
+            'ignore_flag': 0,              # 1 = ignored during eval
+        },
+        ...
+    ],
+}
+```
+
+---
+
+## Transform pipeline
+
+The pipeline is a list of `dict` configs applied in order by `mmengine.dataset.Compose`. Common transforms in `mmdet.datasets.transforms`:
+
+<AccordionGroup>
+  <Accordion title="Loading">
+    | Type string | Purpose |
+    |---|---|
+    | `LoadImageFromFile` | Read image from disk (mmcv backend) |
+    | `LoadImageFromNDArray` | Wrap a pre-loaded numpy array |
+    | `LoadAnnotations` | Load bbox, label, mask, and semantic-seg fields |
+    | `LoadPanopticAnnotations` | Load panoptic segmentation annotations |
+    | `LoadProposals` | Attach pre-computed proposal boxes |
+    | `InferencerLoader` | Used internally by `DetInferencer` |
+  </Accordion>
+  <Accordion title="Geometric augmentation">
+    | Type string | Purpose |
+    |---|---|
+    | `Resize` | Resize image to fixed size or within a range |
+    | `RandomResize` | Random scale jitter |
+    | `RandomFlip` | Horizontal (and optional vertical) flip |
+    | `RandomCrop` | Crop a random sub-region |
+    | `Pad` | Pad to a multiple or fixed size |
+    | `Albu` | Albumentations-backed augmentations |
+    | `Mosaic` | Combine 4 images in a mosaic grid |
+    | `MixUp` | Mix two images with a blend factor |
+    | `YOLOXHSVRandomAug` | HSV augmentation used in YOLOX |
+    | `CopyPaste` | Copy-paste instance augmentation |
+  </Accordion>
+  <Accordion title="Photometric augmentation">
+    | Type string | Purpose |
+    |---|---|
+    | `PhotoMetricDistortion` | Random brightness, contrast, hue, saturation |
+    | `RandomErasing` | Random rectangular erasing |
+    | `AutoAugment` | AutoAugment policy search |
+    | `RandAugment` | RandAugment policy |
+  </Accordion>
+  <Accordion title="Packing">
+    | Type string | Purpose |
+    |---|---|
+    | `PackDetInputs` | Pack `results` dict into a `DetDataSample` |
+    | `PackTrackInputs` | Pack multi-frame tracking data |
+  </Accordion>
+</AccordionGroup>
+
+### `results` dict keys
+
+The transform pipeline passes a `results` dict between transforms. Key fields:
+
+| Field | Type | Notes |
+|---|---|---|
+| `img` | `np.ndarray` | HWC BGR image |
+| `img_path` | `str` | Source file path |
+| `img_shape` | `tuple[int, int]` | `(H, W)` after loading/resizing |
+| `ori_shape` | `tuple[int, int]` | Original `(H, W)` before any resize |
+| `scale_factor` | `tuple[float, float]` | `(w_scale, h_scale)` ratio |
+| `flip` | `bool` | Whether the image was flipped |
+| `gt_bboxes` | `np.ndarray` | `(N, 4)` in xyxy format |
+| `gt_bboxes_labels` | `np.ndarray` | `(N,)` integer class indices |
+| `gt_masks` | `BitmapMasks \| PolygonMasks` | Instance masks (optional) |
+| `gt_seg_map` | `np.ndarray` | Semantic segmentation label map (optional) |
+| `gt_panoptic_seg` | `np.ndarray` | Panoptic seg map (optional) |
+| `gt_ignore_flags` | `np.ndarray` | `(N,)` bool ignore mask |
+| `inputs` | `torch.Tensor` | CHW float tensor after normalization |
+| `data_samples` | `DetDataSample` | Packed output of `PackDetInputs` |
+
+---
+
+## DetDataSample
+
+`mmdet.structures.DetDataSample` is the standard data-exchange container between components. It subclasses `mmengine.structures.BaseDataElement`.
+
+### Attributes
+
+<ResponseField name="gt_instances" type="InstanceData">
+  Ground-truth instance annotations. Contains `bboxes` (N×4 tensor), `labels` (N,), and optionally `masks` and `ignore_flags`.
+</ResponseField>
+
+<ResponseField name="pred_instances" type="InstanceData">
+  Model predictions. Contains `bboxes` (N×4 tensor), `labels` (N,), `scores` (N,), and optionally `masks`.
+</ResponseField>
+
+<ResponseField name="proposals" type="InstanceData">
+  Region proposals from the RPN (two-stage models only).
+</ResponseField>
+
+<ResponseField name="ignored_instances" type="InstanceData">
+  Instances flagged to be ignored during loss computation.
+</ResponseField>
+
+<ResponseField name="gt_panoptic_seg" type="PixelData">
+  Ground-truth panoptic segmentation map.
+</ResponseField>
+
+<ResponseField name="pred_panoptic_seg" type="PixelData">
+  Predicted panoptic segmentation map.
+</ResponseField>
+
+<ResponseField name="gt_sem_seg" type="PixelData">
+  Ground-truth semantic segmentation label map.
+</ResponseField>
+
+<ResponseField name="pred_sem_seg" type="PixelData">
+  Predicted semantic segmentation map.
+</ResponseField>
+
+### Usage example
+
+```python
+import torch
+from mmengine.structures import InstanceData
+from mmdet.structures import DetDataSample
+
+data_sample = DetDataSample()
+
+# Set ground-truth instances
+gt = InstanceData()
+gt.bboxes = torch.tensor([[10, 20, 100, 200], [50, 60, 150, 250]], dtype=torch.float32)
+gt.labels = torch.tensor([0, 1])
+data_sample.gt_instances = gt
+
+# Set predictions
+pred = InstanceData()
+pred.bboxes = torch.tensor([[12, 22, 98, 198]], dtype=torch.float32)
+pred.scores = torch.tensor([0.92])
+pred.labels = torch.tensor([0])
+data_sample.pred_instances = pred
+
+print(data_sample.pred_instances.bboxes)
+```
+
+---
+
+## Sampler classes
+
+| Class | Notes |
+|---|---|
+| `AspectRatioBatchSampler` | Group images by aspect ratio to reduce padding |
+| `ClassAwareSampler` | Balance sampling across categories |
+| `MultiSourceSampler` | Sample from multiple datasets with weights |
+| `GroupMultiSourceSampler` | Multi-source sampler with aspect-ratio grouping |
+| `CustomSampleSizeSampler` | Fixed number of samples per class per epoch |
+| `TrackImgSampler` | Per-frame sampler for tracking datasets |
+| `TrackAspectRatioBatchSampler` | Aspect-ratio batch sampler for tracking |
+
+<Tip>
+`MultiImageMixDataset` must wrap the underlying dataset in your config when using Mosaic or MixUp transforms, because those transforms need to sample additional images from the dataset at transform time.
+</Tip>

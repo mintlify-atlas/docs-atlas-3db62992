@@ -1,0 +1,180 @@
+---
+title: "Visualize detection results and training metrics"
+description: "Configure DetLocalVisualizer, enable DetVisualizationHook, integrate TensorBoard or WandB, and analyze training logs with analyze_logs.py."
+keywords: ["mmdetection", "visualization", "tensorboard", "wandb", "DetLocalVisualizer", "training curves"]
+---
+
+MMDetection's visualization system is built on MMEngine's `Visualizer`, which provides a unified interface for drawing predictions, logging training metrics, and writing outputs to local disk, TensorBoard, or WandB. All behavior is controlled through the config file.
+
+---
+
+## Default visualizer configuration
+
+The default visualizer is defined in `configs/_base_/default_runtime.py`:
+
+```python
+vis_backends = [dict(type='LocalVisBackend')]
+visualizer = dict(
+    type='DetLocalVisualizer',
+    vis_backends=vis_backends,
+    name='visualizer')
+```
+
+`DetLocalVisualizer` handles detection-specific drawing such as bounding boxes and instance masks. `LocalVisBackend` saves all outputs — loss curves, learning rate curves, evaluation metrics, and rendered images — to the `{work_dir}/{config_name}/{timestamp}/vis_data/` folder.
+
+---
+
+## Enabling TensorBoard or WandB
+
+To write training data to TensorBoard, WandB, or both, add the corresponding backend to `vis_backends` in your config:
+
+```python
+# Append to your config file (or a child config that inherits default_runtime)
+_base_.visualizer.vis_backends = [
+    dict(type='LocalVisBackend'),
+    dict(type='TensorboardVisBackend'),
+    dict(type='WandbVisBackend'),
+]
+```
+
+<Tip>
+You can mix multiple backends. For example, keep `LocalVisBackend` for local inspection while also streaming to WandB during long training runs.
+</Tip>
+
+Both `LoggerHook` and `DetVisualizationHook` respect the configured backends, so loss curves, learning rates, evaluation results, and prediction images are all forwarded to the same set of backends automatically.
+
+---
+
+## Visualizing validation and test predictions
+
+`DetVisualizationHook` draws detection predictions during validation and testing. It is disabled by default:
+
+```python
+visualization = dict(
+    type='DetVisualizationHook',
+    draw=False,     # off by default
+    interval=1,
+    show=False)
+```
+
+| Parameter | Description |
+|---|---|
+| `draw` | Enable or disable the hook. |
+| `interval` | How many validation iterations between saved/displayed frames. |
+| `show` | Pop up a window to display results interactively. |
+
+### Enabling during training
+
+Override the hook in your config to turn it on and optionally show images:
+
+```python
+visualization = _base_.default_hooks.visualization
+visualization.update(dict(draw=True, show=True))
+```
+
+### Enabling during testing via CLI
+
+You can enable visualization at test time without modifying any config by passing `--show` or `--show-dir` to `tools/test.py`:
+
+```bash
+# Display results interactively
+python tools/test.py \
+    configs/rtmdet/rtmdet_tiny_8xb32-300e_coco.py \
+    https://download.openmmlab.com/mmdetection/v3.0/rtmdet/rtmdet_tiny_8xb32-300e_coco/rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth \
+    --show
+
+# Save annotated images to a directory
+python tools/test.py \
+    configs/rtmdet/rtmdet_tiny_8xb32-300e_coco.py \
+    https://download.openmmlab.com/mmdetection/v3.0/rtmdet/rtmdet_tiny_8xb32-300e_coco/rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth \
+    --show-dir imgs/
+```
+
+---
+
+## Browsing dataset annotations
+
+`tools/analysis_tools/browse_dataset.py` lets you inspect images and their ground-truth bounding box annotations after data augmentation transforms are applied. This is useful for verifying that your pipeline is behaving correctly before starting a training run.
+
+```bash
+python tools/analysis_tools/browse_dataset.py \
+    ${CONFIG} \
+    [--skip-type ${SKIP_TYPE}] \
+    [--output-dir ${OUTPUT_DIR}] \
+    [--not-show] \
+    [--show-interval ${SHOW_INTERVAL}]
+```
+
+---
+
+## Analyzing training logs
+
+`tools/analysis_tools/analyze_logs.py` reads the JSON log files produced during training and plots loss or mAP curves.
+
+<Note>
+Install the plotting dependency first: `pip install seaborn`
+</Note>
+
+### Plot a single metric
+
+```bash
+python tools/analysis_tools/analyze_logs.py plot_curve \
+    log.json \
+    --keys loss_cls \
+    --legend loss_cls
+```
+
+### Plot multiple metrics and save to PDF
+
+```bash
+python tools/analysis_tools/analyze_logs.py plot_curve \
+    log.json \
+    --keys loss_cls loss_bbox \
+    --out losses.pdf
+```
+
+### Compare two runs
+
+```bash
+python tools/analysis_tools/analyze_logs.py plot_curve \
+    log1.json log2.json \
+    --keys bbox_mAP \
+    --legend run1 run2
+```
+
+### Compute average training speed
+
+```bash
+python tools/analysis_tools/analyze_logs.py cal_train_time \
+    log.json \
+    [--include-outliers]
+```
+
+Expected output:
+
+```text
+-----Analyze train time of work_dirs/some_exp/20190611_192040.log.json-----
+slowest epoch 11, average time is 1.2024
+fastest epoch 1, average time is 1.1909
+time std over epochs is 0.0028
+average iter time: 1.1959 s/iter
+```
+
+---
+
+## Summary of visualization options
+
+<CardGroup cols={2}>
+  <Card title="Local disk" icon="hard-drive">
+    Default `LocalVisBackend` saves everything to `{work_dir}/vis_data/`. No additional setup required.
+  </Card>
+  <Card title="TensorBoard" icon="chart-line">
+    Add `TensorboardVisBackend` to `vis_backends`. Run `tensorboard --logdir {work_dir}` to view.
+  </Card>
+  <Card title="WandB" icon="cloud">
+    Add `WandbVisBackend` to `vis_backends`. Requires a WandB account and `pip install wandb`.
+  </Card>
+  <Card title="Log analysis" icon="magnifying-glass-chart">
+    Use `analyze_logs.py` to plot loss and mAP curves from saved JSON logs without a live run.
+  </Card>
+</CardGroup>

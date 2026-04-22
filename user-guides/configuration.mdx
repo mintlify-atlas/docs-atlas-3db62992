@@ -1,0 +1,282 @@
+---
+title: "Configure MMDetection with hierarchical config files"
+description: "Learn how MMDetection's modular config system works, including _base_ inheritance, config sections, CLI overrides, and naming conventions."
+keywords: ["mmdetection", "config", "configuration", "_base_", "inheritance", "cfg-options"]
+---
+
+MMDetection uses [MMEngine's config system](https://mmengine.readthedocs.io/en/latest/advanced_tutorials/config.html) to manage every aspect of model architecture, data loading, training schedules, and runtime behaviour. All configs are plain Python files, and a hierarchical inheritance mechanism lets you compose and override settings without duplicating code.
+
+## Config file structure
+
+A complete config file is composed of several functional sections. Each section can live in its own `_base_` file and be mixed together.
+
+### Model config
+
+The `model` key defines the full detection pipeline — backbone, neck, head(s), data preprocessor, and training/testing hyperparameters.
+
+```python
+model = dict(
+    type='MaskRCNN',
+    data_preprocessor=dict(
+        type='DetDataPreprocessor',
+        mean=[123.675, 116.28, 103.53],
+        std=[58.395, 57.12, 57.375],
+        bgr_to_rgb=True,
+        pad_mask=True,
+        pad_size_divisor=32),
+    backbone=dict(
+        type='ResNet',
+        depth=50,
+        num_stages=4,
+        out_indices=(0, 1, 2, 3),
+        frozen_stages=1,
+        norm_cfg=dict(type='BN', requires_grad=True),
+        norm_eval=True,
+        style='pytorch',
+        init_cfg=dict(type='Pretrained',
+                      checkpoint='torchvision://resnet50')),
+    neck=dict(
+        type='FPN',
+        in_channels=[256, 512, 1024, 2048],
+        out_channels=256,
+        num_outs=5),
+    # rpn_head, roi_head, train_cfg, test_cfg ...
+)
+```
+
+### Dataset and evaluator config
+
+Dataset type, data root, pipeline transforms, and dataloader settings are set together. Intermediate variables such as `train_pipeline` are defined first, then passed into the dataloader dict.
+
+```python
+dataset_type = 'CocoDataset'
+data_root = 'data/coco/'
+
+train_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
+    dict(type='Resize', scale=(1333, 800), keep_ratio=True),
+    dict(type='RandomFlip', prob=0.5),
+    dict(type='PackDetInputs'),
+]
+
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='Resize', scale=(1333, 800), keep_ratio=True),
+    dict(type='PackDetInputs',
+         meta_keys=('img_id', 'img_path', 'ori_shape',
+                    'img_shape', 'scale_factor')),
+]
+
+train_dataloader = dict(
+    batch_size=2,
+    num_workers=2,
+    persistent_workers=True,
+    sampler=dict(type='DefaultSampler', shuffle=True),
+    batch_sampler=dict(type='AspectRatioBatchSampler'),
+    dataset=dict(
+        type=dataset_type,
+        data_root=data_root,
+        ann_file='annotations/instances_train2017.json',
+        data_prefix=dict(img='train2017/'),
+        filter_cfg=dict(filter_empty_gt=True, min_size=32),
+        pipeline=train_pipeline))
+
+val_dataloader = dict(
+    batch_size=1,
+    num_workers=2,
+    persistent_workers=True,
+    drop_last=False,
+    sampler=dict(type='DefaultSampler', shuffle=False),
+    dataset=dict(
+        type=dataset_type,
+        data_root=data_root,
+        ann_file='annotations/instances_val2017.json',
+        data_prefix=dict(img='val2017/'),
+        test_mode=True,
+        pipeline=test_pipeline))
+
+test_dataloader = val_dataloader
+```
+
+Evaluators are configured separately:
+
+```python
+val_evaluator = dict(
+    type='CocoMetric',
+    ann_file=data_root + 'annotations/instances_val2017.json',
+    metric=['bbox', 'segm'])
+test_evaluator = val_evaluator
+```
+
+### Training and testing loop config
+
+```python
+train_cfg = dict(
+    type='EpochBasedTrainLoop',
+    max_epochs=12,
+    val_interval=1)
+val_cfg = dict(type='ValLoop')
+test_cfg = dict(type='TestLoop')
+```
+
+### Optimization config
+
+```python
+optim_wrapper = dict(
+    type='OptimWrapper',
+    optimizer=dict(type='SGD', lr=0.02, momentum=0.9, weight_decay=0.0001))
+
+param_scheduler = [
+    dict(type='LinearLR', start_factor=0.001, by_epoch=False,
+         begin=0, end=500),
+    dict(type='MultiStepLR', by_epoch=True, begin=0, end=12,
+         milestones=[8, 11], gamma=0.1),
+]
+```
+
+<Tip>
+To enable mixed precision training, change `optim_wrapper.type` to `'AmpOptimWrapper'`, or pass `--amp` on the command line when calling `tools/train.py`.
+</Tip>
+
+### Runtime config
+
+```python
+default_scope = 'mmdet'
+
+vis_backends = [dict(type='LocalVisBackend')]
+visualizer = dict(
+    type='DetLocalVisualizer',
+    vis_backends=vis_backends,
+    name='visualizer')
+
+log_level = 'INFO'
+load_from = None   # load weights only (no optimizer state)
+resume = False     # resume training from latest checkpoint
+```
+
+---
+
+## Config file inheritance
+
+MMDetection ships four base component types under `configs/_base_/`: `models`, `datasets`, `schedules`, and `default_runtime`. Configs that assemble these components are called *primitive* configs; all other configs inherit from them.
+
+### Inheriting from a single file
+
+```python
+_base_ = './mask-rcnn_r50_fpn_1x_coco.py'
+```
+
+### Inheriting from multiple files
+
+```python
+_base_ = [
+    '../_base_/models/mask-rcnn_r50_fpn.py',
+    '../_base_/datasets/coco_instance.py',
+    '../_base_/schedules/schedule_1x.py',
+    '../_base_/default_runtime.py',
+]
+```
+
+<Note>
+Keep inheritance depth to a maximum of three levels. Within a folder, only one *primitive* config should exist; all others inherit from it.
+</Note>
+
+### Overriding keys in a child config
+
+Any key defined in a child config silently overrides the value from the base. To override a nested dict while discarding all inherited keys in that dict, use `_delete_=True`:
+
+```python
+_base_ = '../mask_rcnn/mask-rcnn_r50_fpn_1x_coco.py'
+
+model = dict(
+    backbone=dict(
+        _delete_=True,   # drop all ResNet keys
+        type='HRNet',
+        extra=dict(...),
+        init_cfg=dict(type='Pretrained',
+                      checkpoint='open-mmlab://msra/hrnetv2_w32')))
+```
+
+### Reusing base variables
+
+```python
+_base_ = './mask-rcnn_r50_fpn_1x_coco.py'
+
+# Copy the base model dict into a local variable
+a = {{_base_.model}}
+```
+
+### Updating intermediate pipeline variables
+
+When you redefine `train_pipeline` in a child config, pass it back into the dataloader; otherwise the dataloader still references the base version:
+
+```python
+_base_ = './mask-rcnn_r50_fpn_1x_coco.py'
+
+train_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
+    dict(type='RandomResize', scale=[(1333, 640), (1333, 800)],
+         keep_ratio=True),
+    dict(type='RandomFlip', prob=0.5),
+    dict(type='PackDetInputs'),
+]
+
+train_dataloader = dict(dataset=dict(pipeline=train_pipeline))
+```
+
+---
+
+## Command-line overrides with `--cfg-options`
+
+You can override any config key without editing files by passing `--cfg-options` to `tools/train.py` or `tools/test.py`.
+
+<Tabs>
+  <Tab title="Override a scalar">
+    ```bash
+    python tools/train.py configs/faster_rcnn/faster-rcnn_r50_fpn_1x_coco.py \
+        --cfg-options model.backbone.norm_eval=False
+    ```
+  </Tab>
+  <Tab title="Override a list item">
+    ```bash
+    # Change the first pipeline step type
+    python tools/train.py configs/faster_rcnn/faster-rcnn_r50_fpn_1x_coco.py \
+        --cfg-options train_dataloader.dataset.pipeline.0.type=LoadImageFromNDArray
+    ```
+  </Tab>
+  <Tab title="Override a list/tuple value">
+    ```bash
+    # Change normalisation means (no spaces inside quotes)
+    python tools/train.py configs/faster_rcnn/faster-rcnn_r50_fpn_1x_coco.py \
+        --cfg-options model.data_preprocessor.mean="[127,127,127]"
+    ```
+  </Tab>
+</Tabs>
+
+To inspect the fully-resolved config after inheritance, run:
+
+```bash
+python tools/misc/print_config.py /PATH/TO/CONFIG
+```
+
+---
+
+## Config naming conventions
+
+Config filenames follow this pattern:
+
+```
+{algorithm}_{components}_{training_settings}_{train_dataset}[_{test_dataset}].py
+```
+
+| Part | Example | Meaning |
+|---|---|---|
+| `algorithm` | `faster-rcnn` | Detector or algorithm name |
+| `components` | `r50_fpn` | Backbone and neck |
+| `training_settings` | `8xb2-1x` | 8 GPUs × 2 images, 1× schedule (12 epochs) |
+| `train_dataset` | `coco` | Training dataset |
+| `test_dataset` | *(omitted)* | Same as train dataset |
+
+Schedule shorthand: `1x` = 12 epochs, `2x` = 24 epochs, `20e` = 20 epochs. GPU × batch notation: `8xb2` means 8 GPUs with 2 images per GPU.

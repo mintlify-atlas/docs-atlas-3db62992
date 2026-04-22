@@ -1,0 +1,221 @@
+---
+title: "Implement and configure custom loss functions in MMDetection"
+description: "Learn how to write a custom loss class, use weighted_loss, register with LOSSES, and configure loss weight and reduction in MMDetection."
+keywords: ["custom loss", "FocalLoss", "GIoULoss", "LOSSES", "loss_weight", "reduction", "MMDetection"]
+---
+
+MMDetection provides a rich collection of loss functions including `FocalLoss`, `GIoULoss`, `SmoothL1Loss`, `CrossEntropyLoss`, `VarifocalLoss`, and more. Each loss class is registered in the `MODELS` registry (losses share the model registry) and is configured through the `loss_cls` or `loss_bbox` field in a head's config. This guide explains the computation pipeline, how to tune built-in losses, and how to implement your own.
+
+## Loss computation pipeline
+
+Every loss in MMDetection follows the same five-step pipeline:
+
+<Steps>
+  <Step title="Sampling">
+    For some losses (e.g. `CrossEntropyLoss` in RPN), a sampler selects positive and negative examples to maintain a fixed ratio. Configure the sampler in `train_cfg`:
+
+    ```python configs/my_config.py
+    train_cfg = dict(
+        rpn=dict(
+            sampler=dict(
+                type='RandomSampler',
+                num=256,
+                pos_fraction=0.5,
+                neg_pos_ub=-1,
+                add_gt_as_proposals=False)))
+    ```
+
+    Losses with built-in balancing mechanisms — `FocalLoss`, `GHMC`, `QualityFocalLoss` — do not require a separate sampler.
+  </Step>
+
+  <Step title="Element-wise loss (kernel function)">
+    The core loss kernel computes a per-element or per-sample loss tensor. This is where `gamma`, `alpha`, `beta`, and similar hyperparameters live.
+  </Step>
+
+  <Step title="Element-wise weighting">
+    The loss tensor is multiplied by a weight tensor of the same shape. Heads compute `label_weights` and `bbox_weights` in their `get_targets` method to up-weight or down-weight individual predictions.
+  </Step>
+
+  <Step title="Reduction">
+    The weighted loss tensor is reduced to a scalar using `mean`, `sum`, or `none`. Pass `avg_factor` to normalize by a count other than the total number of elements.
+  </Step>
+
+  <Step title="Scalar weighting">
+    The scalar result is multiplied by `loss_weight`, which controls the relative contribution of this loss in multi-task training.
+  </Step>
+</Steps>
+
+## Configure a built-in loss
+
+Most tuning is done through the config without writing any code. The `FocalLoss` constructor maps directly to config keys:
+
+<CodeGroup>
+
+```python FocalLoss (default)
+loss_cls = dict(
+    type='FocalLoss',
+    use_sigmoid=True,
+    gamma=2.0,
+    alpha=0.25,
+    reduction='mean',
+    loss_weight=1.0)
+```
+
+```python FocalLoss (tuned)
+loss_cls = dict(
+    type='FocalLoss',
+    use_sigmoid=True,
+    gamma=1.5,   # softer focus on hard examples
+    alpha=0.5,   # balanced foreground/background
+    reduction='sum',
+    loss_weight=0.5)
+```
+
+</CodeGroup>
+
+### Reduction modes
+
+| Mode | Behaviour |
+|------|-----------|
+| `'mean'` | Divide total loss by number of elements (default) |
+| `'sum'` | Sum all element losses |
+| `'none'` | Return the full loss tensor without reduction |
+
+### Loss weight for multi-task learning
+
+The `loss_weight` scalar controls how much each loss contributes to the total. For example, to upweight the regression loss relative to classification:
+
+```python configs/my_config.py
+bbox_head = dict(
+    loss_cls=dict(type='FocalLoss', loss_weight=1.0),
+    loss_bbox=dict(type='GIoULoss', loss_weight=2.0))
+```
+
+## Implement a custom loss
+
+<Steps>
+  <Step title="Write the loss module">
+    Create `mmdet/models/losses/my_loss.py`. Use the `@weighted_loss` decorator on the functional kernel to automatically support the `weight` and `avg_factor` arguments. Wrap it in an `nn.Module` with `loss_weight` and `reduction` parameters.
+
+    ```python mmdet/models/losses/my_loss.py
+    import torch
+    import torch.nn as nn
+
+    from mmdet.registry import MODELS
+    from .utils import weighted_loss
+
+
+    @weighted_loss
+    def my_loss(pred, target):
+        """Element-wise L1 loss kernel."""
+        assert pred.size() == target.size() and target.numel() > 0
+        return torch.abs(pred - target)
+
+
+    @MODELS.register_module()
+    class MyLoss(nn.Module):
+
+        def __init__(self, reduction='mean', loss_weight=1.0):
+            super().__init__()
+            self.reduction = reduction
+            self.loss_weight = loss_weight
+
+        def forward(self,
+                    pred,
+                    target,
+                    weight=None,
+                    avg_factor=None,
+                    reduction_override=None):
+            assert reduction_override in (None, 'none', 'mean', 'sum')
+            reduction = reduction_override or self.reduction
+            loss = self.loss_weight * my_loss(
+                pred, target, weight,
+                reduction=reduction,
+                avg_factor=avg_factor)
+            return loss
+    ```
+
+    The `forward` signature — `(pred, target, weight, avg_factor, reduction_override)` — is the standard contract expected by MMDetection heads. Keep it consistent to ensure compatibility.
+  </Step>
+
+  <Step title="Register the loss">
+    Add an import to `mmdet/models/losses/__init__.py`:
+
+    ```python mmdet/models/losses/__init__.py
+    from .my_loss import MyLoss, my_loss
+    ```
+
+    Or use `custom_imports` in your config:
+
+    ```python configs/my_config.py
+    custom_imports = dict(
+        imports=['mmdet.models.losses.my_loss'],
+        allow_failed_imports=False)
+    ```
+  </Step>
+
+  <Step title="Use the loss in a head config">
+    Reference the loss by its registered name in the head's `loss_bbox` or `loss_cls` field:
+
+    ```python configs/my_config.py
+    bbox_head = dict(
+        type='ATSSHead',
+        loss_bbox=dict(type='MyLoss', loss_weight=1.0))
+    ```
+  </Step>
+</Steps>
+
+## IoU-based regression losses
+
+MMDetection includes several IoU family losses for bounding box regression. They all follow the same config pattern:
+
+<Tabs>
+  <Tab title="GIoULoss">
+    Generalized IoU penalizes predictions that do not overlap with ground truth.
+
+    ```python
+    loss_bbox = dict(type='GIoULoss', loss_weight=2.0)
+    ```
+  </Tab>
+  <Tab title="DIoULoss">
+    Distance-IoU adds a term that minimises the distance between box centres.
+
+    ```python
+    loss_bbox = dict(type='DIoULoss', loss_weight=2.0)
+    ```
+  </Tab>
+  <Tab title="CIoULoss">
+    Complete-IoU further accounts for aspect ratio consistency.
+
+    ```python
+    loss_bbox = dict(type='CIoULoss', loss_weight=2.0)
+    ```
+  </Tab>
+  <Tab title="SIoULoss">
+    Shape-IoU focuses on shape matching between predicted and target boxes.
+
+    ```python
+    loss_bbox = dict(type='SIoULoss', loss_weight=2.0)
+    ```
+  </Tab>
+</Tabs>
+
+## Element-wise weighting in heads
+
+When a head computes `label_weights` or `bbox_weights` in `get_targets`, those tensors multiply the loss element-wise before reduction. This is separate from the scalar `loss_weight`. You can override `get_targets` to change which predictions are up-weighted.
+
+The `ATSSHead` overrides `get_targets` from `AnchorHead` to produce different weight distributions suited to its assignment strategy. See `mmdet/models/dense_heads/atss_head.py` for a concrete implementation.
+
+## Built-in losses reference
+
+<AccordionGroup>
+  <Accordion title="Classification losses">
+    `CrossEntropyLoss`, `FocalLoss`, `GaussianFocalLoss`, `QualityFocalLoss`, `VarifocalLoss`, `DistributionFocalLoss`, `GHMC`, `SeesawLoss`, `EQLV2Loss`, `MultiPosCrossEntropyLoss`
+  </Accordion>
+  <Accordion title="Regression losses">
+    `SmoothL1Loss`, `L1Loss`, `MSELoss`, `L2Loss`, `BalancedL1Loss`, `IoULoss`, `BoundedIoULoss`, `GIoULoss`, `DIoULoss`, `CIoULoss`, `EIoULoss`, `SIoULoss`, `GHMR`
+  </Accordion>
+  <Accordion title="Segmentation and other losses">
+    `DiceLoss`, `AssociativeEmbeddingLoss`, `KnowledgeDistillationKLDivLoss`, `TripletLoss`, `MarginL2Loss`, `DDQAuxLoss`
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,178 @@
+---
+title: 'Instance and panoptic segmentation models'
+description: 'Pretrained segmentation models in MMDetection: Mask R-CNN, SOLOv2, CondInst, Mask2Former, Panoptic FPN, and more with config names and inference commands.'
+keywords: ['instance segmentation', 'panoptic segmentation', 'Mask R-CNN', 'Mask2Former', 'SOLOv2', 'CondInst', 'MaskFormer', 'mmdetection']
+---
+
+MMDetection supports a wide range of pixel-level recognition tasks beyond bounding-box detection. The model zoo includes pretrained checkpoints for both instance segmentation — where each object instance receives an independent mask — and panoptic segmentation, which additionally assigns a semantic label to every background pixel. All models are evaluated on COCO 2017 using the standard distributed training setup described in the [Model Zoo overview](/model-zoo/overview).
+
+## Segmentation families
+
+<Tabs>
+  <Tab title="Instance segmentation">
+
+Instance segmentation models predict a binary mask for each detected object instance. MMDetection covers both two-stage (proposal-based) and single-stage (mask-direct) approaches.
+
+### Mask R-CNN
+
+Mask R-CNN (ICCV 2017) extends Faster R-CNN with a parallel mask prediction branch that operates on RoI-aligned features. It is the canonical baseline for instance segmentation.
+
+| Config | Backbone | Schedule | Box AP | Mask AP |
+|---|---|---|---|---|
+| `mask-rcnn_r50_fpn_1x_coco` | ResNet-50 FPN | 1x | 38.2 | 34.7 |
+| `mask-rcnn_r50_fpn_2x_coco` | ResNet-50 FPN | 2x | 39.2 | 35.4 |
+| `mask-rcnn_r101_fpn_1x_coco` | ResNet-101 FPN | 1x | 40.0 | 36.1 |
+| `mask-rcnn_x101-64x4d_fpn_1x_coco` | ResNeXt-101-64x4d FPN | 1x | 42.1 | 38.0 |
+
+### Cascade Mask R-CNN
+
+Cascade Mask R-CNN (CVPR 2018) applies the cascade multi-stage refinement strategy from Cascade R-CNN to instance segmentation, producing more accurate masks at higher IoU thresholds.
+
+Representative config: `cascade-mask-rcnn_r50_fpn_1x_coco`
+
+### SOLOv2
+
+SOLOv2 (NeurIPS 2020) predicts instance masks directly from a grid of per-pixel predictions, without RoI pooling or a bounding-box regression stage. It achieves competitive mask quality at real-time speeds.
+
+Representative config: `solov2_r50_fpn_1x_coco`
+
+### CondInst
+
+CondInst (ECCV 2020) conditions lightweight mask prediction networks on per-instance features, allowing a single convolutional pass to produce high-resolution instance masks at low cost.
+
+Representative config: `condinst_r50_fpn_ms-poly-90k_coco_instance`
+
+### RTMDet-Ins
+
+RTMDet-Ins extends RTMDet with a mask prediction branch, achieving state-of-the-art speed–accuracy trade-offs for real-time instance segmentation.
+
+| Config | Backbone | Mask AP | FPS (TRT FP16 BS1) |
+|---|---|---|---|
+| `rtmdet-ins_tiny_8xb32-300e_coco` | CSPNeXt-T | 35.5 | — |
+| `rtmdet-ins_s_8xb32-300e_coco` | CSPNeXt-S | 39.9 | — |
+| `rtmdet-ins_m_8xb32-300e_coco` | CSPNeXt-M | 43.9 | — |
+| `rtmdet-ins_l_8xb32-300e_coco` | CSPNeXt-L | 45.8 | — |
+| `rtmdet-ins_x_8xb16-300e_coco` | CSPNeXt-X | 46.9 | 188 |
+
+### Mask2Former (instance)
+
+Mask2Former (ArXiv 2021) is a universal segmentation architecture based on masked cross-attention. The instance segmentation variant uses COCO instance annotations and supports ResNet and Swin Transformer backbones.
+
+| Config | Backbone | Mask AP |
+|---|---|---|
+| `mask2former_r50_8xb2-lsj-50e_coco` | ResNet-50 | 43.7 |
+| `mask2former_r101_8xb2-lsj-50e_coco` | ResNet-101 | 44.9 |
+| `mask2former_swin-t-p4-w7-224_8xb2-lsj-50e_coco` | Swin-T | 47.7 |
+| `mask2former_swin-s-p4-w7-224_8xb2-lsj-50e_coco` | Swin-S | 49.6 |
+
+  </Tab>
+  <Tab title="Panoptic segmentation">
+
+Panoptic segmentation combines instance-level masks for "things" (countable objects) with semantic labels for "stuff" (amorphous regions such as sky or road). MMDetection provides several architectures for this unified task.
+
+### Panoptic FPN
+
+Panoptic FPN (CVPR 2019) adds a lightweight semantic segmentation branch to Mask R-CNN's FPN backbone, jointly training both instance and semantic heads for a simple yet effective panoptic baseline.
+
+Representative config: `panoptic-fpn_r50_fpn_1x_coco`
+
+### MaskFormer
+
+MaskFormer (NeurIPS 2021) reframes semantic and panoptic segmentation as a mask classification problem solved by a transformer decoder over a set of learned queries, unifying the segmentation tasks under one model.
+
+Representative config: `maskformer_r50_ms-16xb1-75e_coco`
+
+### Mask2Former (panoptic)
+
+The panoptic variant of Mask2Former trains on the combined COCO panoptic annotations. It currently holds strong results on the COCO panoptic leaderboard.
+
+| Config | Backbone | PQ |
+|---|---|---|
+| `mask2former_r50_8xb2-lsj-50e_coco-panoptic` | ResNet-50 | 51.9 |
+| `mask2former_r101_8xb2-lsj-50e_coco-panoptic` | ResNet-101 | 52.9 |
+| `mask2former_swin-t-p4-w7-224_8xb2-lsj-50e_coco-panoptic` | Swin-T | 53.9 |
+| `mask2former_swin-s-p4-w7-224_8xb2-lsj-50e_coco-panoptic` | Swin-S | 55.1 |
+| `mask2former_swin-b-p4-w12-384_8xb2-lsj-50e_coco-panoptic` | Swin-B | 56.4 |
+| `mask2former_swin-l-p4-w12-384-in21k_16xb1-lsj-100e_coco-panoptic` | Swin-L (IN-21K) | 57.8 |
+
+<Note>
+Swin Transformer backbones for Mask2Former require ImageNet-21K pretrained weights. These are larger downloads — typically 200–400 MB for the backbone alone.
+</Note>
+
+  </Tab>
+</Tabs>
+
+## Model families at a glance
+
+<CardGroup cols={2}>
+  <Card title="Mask R-CNN family" icon="layer-group">
+    Mask R-CNN, Cascade Mask R-CNN, Hybrid Task Cascade (HTC), and Mask Scoring R-CNN. All use RoI-aligned two-stage proposals. Strong baselines for most use cases.
+  </Card>
+  <Card title="Single-stage instance" icon="bolt">
+    SOLO, SOLOv2, CondInst, YOLACT, BoxInst, and RTMDet-Ins. Faster inference than two-stage methods, suitable for real-time applications.
+  </Card>
+  <Card title="Query-based" icon="table-columns">
+    QueryInst, Mask2Former (instance). Transformer-decoder models that predict a fixed number of object queries, enabling end-to-end training without NMS.
+  </Card>
+  <Card title="Panoptic" icon="map">
+    Panoptic FPN, MaskFormer, Mask2Former (panoptic). Produce thing + stuff predictions in a single model, evaluated with PQ (Panoptic Quality).
+  </Card>
+</CardGroup>
+
+## Downloading segmentation models
+
+```bash
+# Install MIM if you haven't already
+pip install openmim
+
+# Mask R-CNN R-50 FPN 1x
+mim download mmdet --config mask-rcnn_r50_fpn_1x_coco --dest ./checkpoints
+
+# RTMDet-Ins large
+mim download mmdet --config rtmdet-ins_l_8xb32-300e_coco --dest ./checkpoints
+
+# Mask2Former R-50 instance segmentation
+mim download mmdet --config mask2former_r50_8xb2-lsj-50e_coco --dest ./checkpoints
+
+# Mask2Former Swin-L panoptic
+mim download mmdet \
+    --config mask2former_swin-l-p4-w12-384-in21k_16xb1-lsj-100e_coco-panoptic \
+    --dest ./checkpoints
+```
+
+## Running inference
+
+Use `demo/image_demo.py` for a quick visual result on a single image.
+
+```bash
+# Instance segmentation with Mask R-CNN
+python demo/image_demo.py \
+    demo/demo.jpg \
+    configs/mask_rcnn/mask-rcnn_r50_fpn_1x_coco.py \
+    --weights checkpoints/mask_rcnn_r50_fpn_1x_coco_20200205-d4b0c5d6.pth \
+    --out-dir outputs/
+
+# Instance segmentation with Mask2Former
+python demo/image_demo.py \
+    demo/demo.jpg \
+    configs/mask2former/mask2former_r50_8xb2-lsj-50e_coco.py \
+    --weights checkpoints/mask2former_r50_8xb2-lsj-50e_coco_20220506_191028-8e96e88b.pth \
+    --out-dir outputs/
+```
+
+<Tip>
+Panoptic segmentation models produce additional `seg_map` output. Pass `--show` to visualise both instance and semantic predictions overlaid on the input image in a pop-up window.
+</Tip>
+
+## Benchmarking mask throughput
+
+The benchmark script works identically for segmentation models.
+
+```bash
+python tools/analysis_tools/benchmark.py \
+    configs/mask_rcnn/mask-rcnn_r50_fpn_1x_coco.py \
+    checkpoints/mask_rcnn_r50_fpn_1x_coco_20200205-d4b0c5d6.pth \
+    --log-interval 50
+```
+
+Training throughput comparison for Mask R-CNN R-50 FPN (img/s): MMDetection **61**, Detectron2 62, maskrcnn-benchmark 53, tensorpack 50. See the [overview](/model-zoo/overview) for the full speed benchmark table.

@@ -1,0 +1,282 @@
+---
+title: 'MMDetection model classes and registry'
+description: 'Browse all detector, backbone, neck, dense head, and loss classes registered in mmdet, and learn how to instantiate models from config.'
+keywords: ['models', 'registry', 'detector', 'backbone', 'neck', 'dense head', 'losses', 'FasterRCNN', 'RTMDet', 'DINO']
+---
+
+MMDetection organizes every neural network component — detectors, backbones, necks, heads, and losses — in a unified MMEngine registry. You can look up any class by its string name in a config file, or build models programmatically using `MODELS.build`. This page lists all registered classes and shows common instantiation patterns.
+
+## Detectors
+
+All detector classes inherit from `BaseDetector` and are registered under the `mmdet` scope. The table below shows the classes exported from `mmdet.models.detectors`.
+
+<Tabs>
+  <Tab title="Two-stage">
+    | Class | Description |
+    |---|---|
+    | `FasterRCNN` | Two-stage detector with Region Proposal Network |
+    | `MaskRCNN` | `FasterRCNN` extended with a mask head |
+    | `CascadeRCNN` | Cascade of bbox heads with increasing IoU thresholds |
+    | `HybridTaskCascade` | Multi-task cascade with semantic segmentation branch |
+    | `MaskScoringRCNN` | `MaskRCNN` with an additional mask-scoring head |
+    | `GridRCNN` | Grid-based localization in a two-stage framework |
+    | `PointRend` | Point-based mask refinement on top of `MaskRCNN` |
+    | `SparseRCNN` | End-to-end detector with learned proposal boxes |
+    | `QueryInst` | Instance segmentation via parallel query heads |
+    | `SCNet` | Semantic-context guided two-stage detector |
+    | `TridentFasterRCNN` | Multi-scale training with trident convolutions |
+    | `FastRCNN` | Single-stage fast R-CNN (no RPN) |
+  </Tab>
+  <Tab title="One-stage">
+    | Class | Description |
+    |---|---|
+    | `RetinaNet` | Focal-loss anchor-based single-stage detector |
+    | `FCOS` | Anchor-free, fully convolutional one-stage detector |
+    | `ATSS` | Adaptive training sample selection |
+    | `GFL` | Generalized focal loss detector |
+    | `TOOD` | Task-aligned one-stage detector |
+    | `VFNet` | VarifocalNet with joint classification and localization |
+    | `RTMDet` | Real-time detector with CSPNeXt backbone |
+    | `YOLOV3` | YOLOv3 with DarkNet backbone |
+    | `YOLOX` | YOLOX anchor-free YOLO variant |
+    | `YOLOF` | You Only Look One-level Feature |
+    | `YOLACT` | Real-time instance segmentation |
+    | `CenterNet` | Keypoint-based anchor-free detector |
+    | `CornerNet` | Corner-keypoint-based detector |
+    | `FOVEA` | FoveaBox anchor-free detector |
+    | `FSAF` | Feature Selective Anchor-Free |
+    | `NASFCOS` | NAS-searched FCOS variant |
+    | `PAA` | Probabilistic anchor assignment |
+    | `AutoAssign` | Center-prior based dynamic label assignment |
+    | `LAD` | Label assignment distillation |
+    | `DDOD` | Dense distinct proposals for one-stage detection |
+    | `RepPointsDetector` | Rep-points based anchor-free detection |
+    | `SOLO` / `SOLOv2` | Instance segmentation via spatial and channel attention |
+    | `CondInst` | Conditional convolutions for instance segmentation |
+    | `BoxInst` | Box-supervised instance segmentation |
+  </Tab>
+  <Tab title="Transformer-based">
+    | Class | Description |
+    |---|---|
+    | `DETR` | Detection Transformer (original) |
+    | `DeformableDETR` | DETR with deformable attention |
+    | `ConditionalDETR` | Conditional cross-attention for DETR |
+    | `DABDETR` | Dynamic anchor box DETR |
+    | `DINO` | DINO: DETR with improved denoising training |
+    | `DDQDETR` | Dense distinct queries for DETR |
+    | `MaskFormer` | Mask classification for panoptic segmentation |
+    | `Mask2Former` | Masked-attention transformer for universal segmentation |
+    | `PanopticFPN` | FPN-based panoptic segmentation |
+    | `GLIP` | Grounded language-image pre-training |
+    | `GroundingDINO` | Open-set object detection with text prompts |
+  </Tab>
+  <Tab title="Semi-supervised & other">
+    | Class | Description |
+    |---|---|
+    | `SemiBaseDetector` | Base class for semi-supervised detectors |
+    | `SoftTeacher` | End-to-end pseudo-label semi-supervised detection |
+    | `RPN` | Standalone region proposal network |
+    | `KnowledgeDistillationSingleStageDetector` | Single-stage detector with KD |
+    | `CrowdDet` | Detector for crowded scenes |
+    | `Detectron2Wrapper` | Wrapper for Detectron2 models |
+    | `TwoStagePanopticSegmentor` | Two-stage panoptic segmentation |
+  </Tab>
+</Tabs>
+
+### Base classes
+
+| Class | Role |
+|---|---|
+| `BaseDetector` | Abstract base — defines `forward`, `loss`, `predict` interface |
+| `SingleStageDetector` | Backbone + neck + dense head pipeline |
+| `TwoStageDetector` | Backbone + neck + RPN + RoI head pipeline |
+| `DetectionTransformer` | Base for DETR-family models |
+
+---
+
+## Backbones
+
+All classes are in `mmdet.models.backbones` and accept a standard `out_indices` argument to select which stages to return.
+
+| Class | Notes |
+|---|---|
+| `ResNet` | ResNet-18/34/50/101/152 |
+| `ResNetV1d` | ResNet with avg-pool downsampling in stem |
+| `ResNeXt` | ResNeXt grouped convolution variant |
+| `Res2Net` | Hierarchical residual feature maps |
+| `ResNeSt` | Split-attention networks |
+| `DetectoRS_ResNet` / `DetectoRS_ResNeXt` | Recursive feature pyramid backbones |
+| `TridentResNet` | Multi-scale trident convolutions |
+| `HRNet` | High-resolution representation network |
+| `RegNet` | Regularized network design space |
+| `Darknet` | YOLOv3 original backbone |
+| `CSPDarknet` | CSP variant used in YOLOX |
+| `CSPNeXt` | CSPNeXt backbone used in RTMDet |
+| `SwinTransformer` | Swin-T/S/B/L hierarchical vision transformer |
+| `PyramidVisionTransformer` | PVT-v1 |
+| `PyramidVisionTransformerV2` | PVT-v2 |
+| `EfficientNet` | EfficientNet-B0 through B7 |
+| `MobileNetV2` | Lightweight mobile backbone |
+| `HourglassNet` | Stacked hourglass for keypoint-based models |
+| `SSDVGG` | VGG-16 variant for SSD |
+
+---
+
+## Necks
+
+Feature pyramid and aggregation modules in `mmdet.models.necks`.
+
+| Class | Notes |
+|---|---|
+| `FPN` | Feature Pyramid Network |
+| `PAFPN` | Path aggregation FPN |
+| `BFP` | Balanced feature pyramid |
+| `HRFPN` | FPN for HRNet |
+| `NASFPN` | NAS-searched FPN |
+| `NASFCOS_FPN` | FPN variant for NASFCOS |
+| `FPG` | Feature pyramid grids |
+| `FPN_CARAFE` | FPN with CARAFE upsampling |
+| `FPN_DropBlock` | FPN with DropBlock regularization |
+| `RFP` | Recursive feature pyramid |
+| `DilatedEncoder` | Dilated conv encoder used in YOLOF |
+| `CTResNetNeck` | CenterNet ResNet neck |
+| `SSDNeck` | SSD multi-scale neck |
+| `YOLOV3Neck` | Darknet-based YOLO neck |
+| `YOLOXPAFPN` | PAFPN for YOLOX |
+| `CSPNeXtPAFPN` | CSPNeXt-based PAFPN for RTMDet |
+| `DyHead` | Dynamic head with multi-scale attention |
+| `ChannelMapper` | 1×1 conv channel reduction |
+| `SSH` | Single-stage headless face detection neck |
+
+---
+
+## Dense heads
+
+Prediction heads for anchor-free and anchor-based single-stage detectors, located in `mmdet.models.dense_heads`.
+
+<AccordionGroup>
+  <Accordion title="Anchor-based heads">
+    `AnchorHead`, `RetinaHead`, `RetinaSepBNHead`, `GARetinaHead`, `SSDHead`, `GARPNHead`, `RPNHead`, `CascadeRPNHead`, `StageCascadeRPNHead`, `EmbeddingRPNHead`, `FreeAnchorRetinaHead`, `PISARetinaHead`, `PISASSDHead`, `SABLRetinaHead`, `YOLOV3Head`
+  </Accordion>
+  <Accordion title="Anchor-free heads">
+    `AnchorFreeHead`, `FCOSHead`, `FoveaHead`, `FSAFHead`, `NASFCOSHead`, `RepPointsHead`, `GuidedAnchorHead`, `FeatureAdaption`, `ATSSHead`, `GFLHead`, `AutoAssignHead`, `VFNetHead`, `LDHead`, `LADHead`, `DDODHead`, `TOODHead`, `YOLOFHead`, `CenterNetHead`, `CenterNetUpdateHead`, `YOLOXHead`, `RTMDetHead`, `RTMDetSepBNHead`, `RTMDetInsHead`, `RTMDetInsSepBNHead`
+  </Accordion>
+  <Accordion title="Instance segmentation heads">
+    `YOLACTHead`, `YOLACTProtonet`, `SOLOHead`, `DecoupledSOLOHead`, `DecoupledSOLOLightHead`, `SOLOV2Head`, `CondInstBboxHead`, `CondInstMaskHead`, `BoxInstBboxHead`, `BoxInstMaskHead`
+  </Accordion>
+  <Accordion title="Transformer heads">
+    `DETRHead`, `DeformableDETRHead`, `ConditionalDETRHead`, `DABDETRHead`, `DINOHead`, `DDQDETRHead`, `MaskFormerHead`, `Mask2FormerHead`, `ATSSVLFusionHead`, `GroundingDINOHead`, `CentripetalHead`, `CornerHead`, `PAAHead`
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Loss functions
+
+All loss classes are in `mmdet.models.losses` and inherit from `nn.Module`.
+
+| Class | Notes |
+|---|---|
+| `CrossEntropyLoss` | Standard cross-entropy, supports class weights |
+| `FocalLoss` | Sigmoid focal loss for class imbalance |
+| `GaussianFocalLoss` | Focal loss on Gaussian heatmaps |
+| `QualityFocalLoss` | Quality-aware focal loss (GFL) |
+| `DistributionFocalLoss` | Distribution-based localization loss (GFL) |
+| `VarifocalLoss` | Varifocal loss for VFNet |
+| `SmoothL1Loss` | Huber/smooth-L1 regression loss |
+| `L1Loss` | Mean absolute error |
+| `L2Loss` | Mean squared error |
+| `MSELoss` | MSE loss with weight and reduction options |
+| `IoULoss` | IoU-based bounding box regression |
+| `GIoULoss` | Generalized IoU loss |
+| `DIoULoss` | Distance IoU loss |
+| `CIoULoss` | Complete IoU loss |
+| `EIoULoss` | Efficient IoU loss |
+| `SIoULoss` | Shape IoU loss |
+| `BoundedIoULoss` | Bounded IoU loss |
+| `BalancedL1Loss` | Balanced L1 for two-stage detectors |
+| `DiceLoss` | Dice loss for segmentation masks |
+| `SeesawLoss` | Long-tail category re-balancing |
+| `EQLV2Loss` | Equalization loss v2 |
+| `KnowledgeDistillationKLDivLoss` | KL divergence for knowledge distillation |
+| `AssociativeEmbeddingLoss` | Associative embedding for multi-person pose |
+| `GHMC` / `GHMR` | Gradient harmonized mechanism (cls / reg) |
+| `MultiPosCrossEntropyLoss` | Multi-positive cross-entropy |
+| `TripletLoss` | Triplet loss for ReID |
+| `MarginL2Loss` | Margin L2 for distance metric learning |
+| `DDQAuxLoss` | Auxiliary loss for DDQDETR |
+
+---
+
+## Instantiating a model from config
+
+<Tabs>
+  <Tab title="From a config file">
+    ```python
+    from mmengine.config import Config
+    from mmdet.registry import MODELS
+
+    cfg = Config.fromfile('configs/rtmdet/rtmdet_s_8xb32-300e_coco.py')
+    model = MODELS.build(cfg.model)
+    ```
+  </Tab>
+  <Tab title="Using init_detector">
+    ```python
+    from mmdet.apis import init_detector
+
+    model = init_detector(
+        config='configs/faster_rcnn/faster-rcnn_r50_fpn_1x_coco.py',
+        checkpoint='checkpoints/faster_rcnn_r50_fpn_1x_coco.pth',
+        device='cuda:0',
+    )
+    model.eval()
+    ```
+  </Tab>
+  <Tab title="Programmatic construction">
+    ```python
+    from mmdet.registry import MODELS
+
+    model_cfg = dict(
+        type='RTMDet',
+        backbone=dict(type='CSPNeXt', arch='P5', out_indices=(2, 3, 4)),
+        neck=dict(
+            type='CSPNeXtPAFPN',
+            in_channels=[128, 256, 512],
+            out_channels=128,
+        ),
+        bbox_head=dict(
+            type='RTMDetHead',
+            num_classes=80,
+            in_channels=128,
+            stacked_convs=2,
+        ),
+        train_cfg=None,
+        test_cfg=dict(score_thr=0.01, nms=dict(type='nms', iou_threshold=0.65)),
+    )
+    model = MODELS.build(model_cfg)
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Registry lookup
+
+The `MODELS` registry lets you list or retrieve any registered class:
+
+```python
+from mmdet.registry import MODELS
+
+# Check if a class is registered
+print('RTMDet' in MODELS)  # True
+
+# Retrieve the class object
+RTMDet = MODELS.get('RTMDet')
+
+# List all registered detector names
+names = list(MODELS._module_dict.keys())
+```
+
+<Note>
+Custom models must call `@MODELS.register_module()` before they can be referenced by name in a config. See the [Customize Models](/advanced-guides/customize-models) guide for the full workflow.
+</Note>

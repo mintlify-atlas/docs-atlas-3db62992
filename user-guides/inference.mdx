@@ -1,0 +1,257 @@
+---
+title: "Run detection inference with MMDetection"
+description: "Use DetInferencer for Python API inference or demo scripts for CLI inference on single images, batches, and video with output saving options."
+keywords: ["mmdetection", "inference", "DetInferencer", "demo", "image", "video", "prediction"]
+---
+
+MMDetection provides two main ways to run inference: the high-level `DetInferencer` Python API and a set of ready-made demo scripts. Both accept a model name or config/checkpoint pair and produce detection results containing bounding boxes, class labels, and confidence scores.
+
+---
+
+## DetInferencer Python API
+
+`DetInferencer` is the recommended way to integrate MMDetection inference into Python code. It follows the unified Inferencer interface shared across all OpenMMLab libraries.
+
+### Minimal usage
+
+```python
+from mmdet.apis import DetInferencer
+
+# Initialise with a model name — weights are downloaded automatically
+inferencer = DetInferencer('rtmdet_tiny_8xb32-300e_coco')
+
+# Run inference and display the result
+inferencer('demo/demo.jpg', show=True)
+```
+
+<Note>
+On headless servers or SSH sessions without X11 forwarding, `show=True` will fail. Use `out_dir` to save results to disk instead.
+</Note>
+
+---
+
+### Initialisation options
+
+<Tabs>
+  <Tab title="Model name">
+    ```python
+    # Download weights from the model zoo automatically
+    inferencer = DetInferencer(model='rtmdet_tiny_8xb32-300e_coco')
+    ```
+  </Tab>
+  <Tab title="Config + checkpoint">
+    ```python
+    # Load a custom config and local checkpoint file
+    inferencer = DetInferencer(
+        model='path/to/rtmdet_config.py',
+        weights='path/to/rtmdet.pth')
+    ```
+  </Tab>
+  <Tab title="Checkpoint with embedded config">
+    ```python
+    # Works when the config was saved inside the checkpoint by MMEngine
+    inferencer = DetInferencer(
+        weights='https://download.openmmlab.com/mmdetection/v3.0/ddq/'
+                'ddq-detr-4scale_r50_8xb2-12e_coco/'
+                'ddq-detr-4scale_r50_8xb2-12e_coco_20230809_170711-42528127.pth')
+    ```
+  </Tab>
+</Tabs>
+
+To choose a specific device:
+
+```python
+inferencer = DetInferencer(model='rtmdet_tiny_8xb32-300e_coco', device='cuda:1')
+inferencer = DetInferencer(model='rtmdet_tiny_8xb32-300e_coco', device='cpu')
+```
+
+To list all available model names:
+
+```python
+models = DetInferencer.list_models('mmdet')
+```
+
+---
+
+### Input formats
+
+`DetInferencer` accepts several input types in a single call:
+
+```python
+# Single image path
+inferencer('demo/demo.jpg')
+
+# Image URL
+inferencer('https://example.com/image.jpg')
+
+# NumPy array (BGR order)
+import mmcv
+array = mmcv.imread('demo/demo.jpg')
+inferencer(array)
+
+# List of paths or arrays (processed individually)
+inferencer(['img_1.jpg', 'img_2.jpg'])
+
+# Directory — all images inside are processed
+inferencer('path/to/your_imgs/')
+```
+
+---
+
+### Output format
+
+By default, `DetInferencer` returns a dictionary with two keys:
+
+```python
+{
+    'predictions': [
+        {
+            'labels': [...],   # int list, length N
+            'scores': [...],   # float list, length N
+            'bboxes': [...],   # 2-D list, shape (N, 4),
+                               # format: [min_x, min_y, max_x, max_y]
+        },
+        # one entry per input image
+    ],
+    'visualization': [
+        array(..., dtype=uint8),  # rendered image with drawn detections
+    ]
+}
+```
+
+To get the raw `DataSample` objects from the model instead:
+
+```python
+result = inferencer('demo/demo.jpg', return_datasamples=True)
+```
+
+---
+
+### Saving results to files
+
+Set `out_dir` to write both the visualisation images and prediction JSON files to disk:
+
+```python
+inferencer('demo/demo.jpg', out_dir='outputs/', no_save_pred=False)
+```
+
+This produces:
+
+```text
+outputs/
+├── preds/
+│   └── demo.json
+└── vis/
+    └── demo.jpg
+```
+
+---
+
+### Batch inference
+
+Control the inference batch size with `batch_size` (default is 1):
+
+```python
+inferencer(['img_1.jpg', 'img_2.jpg', 'img_3.jpg'], batch_size=2)
+```
+
+---
+
+### Key API parameters
+
+**`DetInferencer.__init__()`**
+
+| Argument | Type | Default | Description |
+|---|---|---|---|
+| `model` | str | None | Model name or path to config file. |
+| `weights` | str | None | Path or URL to the checkpoint. |
+| `device` | str | None | Inference device, e.g. `'cuda:0'` or `'cpu'`. |
+| `palette` | str | `'none'` | Colour palette for visualisation. |
+| `show_progress` | bool | True | Show progress bar during inference. |
+
+**`DetInferencer.__call__()`**
+
+| Argument | Type | Default | Description |
+|---|---|---|---|
+| `inputs` | str / list / np.array | **required** | Image path, directory, array, or list of these. |
+| `batch_size` | int | 1 | Number of images per forward pass. |
+| `show` | bool | False | Display results in a popup window. |
+| `out_dir` | str | `''` | Output directory for saved results. |
+| `no_save_vis` | bool | False | Skip saving visualisation images. |
+| `no_save_pred` | bool | True | Skip saving prediction JSON files. |
+| `pred_score_thr` | float | 0.3 | Minimum score threshold for drawn boxes. |
+| `return_datasamples` | bool | False | Return raw DataSample objects. |
+
+---
+
+## Demo scripts
+
+MMDetection includes ready-to-run demo scripts under `demo/`.
+
+### Image demo
+
+```bash
+python demo/image_demo.py \
+    ${IMAGE_FILE} \
+    ${CONFIG_FILE} \
+    [--weights ${WEIGHTS}] \
+    [--device ${GPU_ID}] \
+    [--pred-score-thr ${SCORE_THR}]
+```
+
+**Example:**
+
+```bash
+python demo/image_demo.py demo/demo.jpg \
+    configs/rtmdet/rtmdet_l_8xb32-300e_coco.py \
+    --weights checkpoints/rtmdet_l_8xb32-300e_coco_20220719_112030-5a0be7c4.pth \
+    --device cpu
+```
+
+### Webcam demo
+
+```bash
+python demo/webcam_demo.py \
+    ${CONFIG_FILE} \
+    ${CHECKPOINT_FILE} \
+    [--device ${GPU_ID}] \
+    [--camera-id ${CAMERA_ID}] \
+    [--score-thr ${SCORE_THR}]
+```
+
+### Video demo
+
+```bash
+python demo/video_demo.py \
+    ${VIDEO_FILE} \
+    ${CONFIG_FILE} \
+    ${CHECKPOINT_FILE} \
+    [--device ${GPU_ID}] \
+    [--score-thr ${SCORE_THR}] \
+    [--out ${OUT_FILE}]
+```
+
+**Example:**
+
+```bash
+python demo/video_demo.py demo/demo.mp4 \
+    configs/rtmdet/rtmdet_l_8xb32-300e_coco.py \
+    checkpoints/rtmdet_l_8xb32-300e_coco_20220719_112030-5a0be7c4.pth \
+    --out result.mp4
+```
+
+### Large image inference
+
+For high-resolution images, use the slicing-based demo which tiles the image into overlapping patches, runs detection on each, then merges results:
+
+```bash
+python demo/large_image_demo.py \
+    ${IMG_PATH} \
+    ${CONFIG_FILE} \
+    ${CHECKPOINT_FILE} \
+    --device ${GPU_ID} \
+    --score-thr ${SCORE_THR} \
+    --patch-size ${PATCH_SIZE} \
+    --patch-overlap-ratio ${PATCH_OVERLAP_RATIO} \
+    --merge-iou-thr ${MERGE_IOU_THR}
+```

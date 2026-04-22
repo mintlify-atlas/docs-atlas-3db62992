@@ -1,97 +1,86 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "MMDetection: PyTorch Object Detection Toolbox"
+description: "MMDetection is an open-source object detection toolbox with 100+ models for detection, instance segmentation, and panoptic segmentation."
 ---
 
-## Setting up
+MMDetection is an open-source object detection toolbox built on PyTorch and part of the OpenMMLab project. It provides a rich collection of object detection, instance segmentation, and panoptic segmentation algorithms — from classic two-stage detectors like Faster R-CNN to modern transformer-based models like DINO and Grounding DINO — all in a modular, extensible framework.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/get-started/installation">
+    Set up MMDetection with PyTorch, MMCV, and MMEngine on Linux, Windows, or macOS.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Quickstart" icon="rocket" href="/get-started/quickstart">
+    Run your first detection inference in minutes using a pretrained RTMDet model.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Model Zoo" icon="database" href="/model-zoo/overview">
+    Browse 100+ pretrained models across detection, segmentation, and tracking tasks.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="API Reference" icon="code" href="/api/det-inferencer">
+    Explore the Python API for inference, training, and evaluation.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## What MMDetection supports
 
-Everything you need to create world-class documentation.
+MMDetection covers the full spectrum of modern detection tasks and model architectures:
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
+<CardGroup cols={2}>
+  <Card title="Object Detection" icon="crosshairs">
+    Two-stage (Faster R-CNN, Cascade R-CNN), one-stage (RetinaNet, FCOS, RTMDet), and transformer-based (DETR, DINO, DAB-DETR) detectors.
   </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
+  <Card title="Instance Segmentation" icon="layer-group">
+    Mask R-CNN, Cascade Mask R-CNN, SOLOv2, CondInst, Mask2Former, and more with pixel-level instance masks.
   </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
+  <Card title="Panoptic Segmentation" icon="object-group">
+    Panoptic FPN, MaskFormer, and Mask2Former for unified semantic and instance segmentation.
   </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
+  <Card title="Open-Vocabulary Detection" icon="magnifying-glass">
+    Grounding DINO and GLIP for language-guided detection using free-form text prompts.
   </Card>
-</Columns>
+</CardGroup>
 
-## Need inspiration?
+## Get started
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<Steps>
+  <Step title="Install MMDetection">
+    Install PyTorch, then install MMDetection via pip or from source.
+    ```bash
+    pip install -U openmim
+    mim install mmengine
+    mim install "mmcv>=2.0.0"
+    mim install mmdet
+    ```
+  </Step>
+  <Step title="Download a pretrained model">
+    Use the `mim download` command to fetch a config and checkpoint.
+    ```bash
+    mim download mmdet --config rtmdet_tiny_8xb32-300e_coco --dest .
+    ```
+  </Step>
+  <Step title="Run inference">
+    Use the Python API to run detection on an image.
+    ```python
+    from mmdet.apis import DetInferencer
+
+    inferencer = DetInferencer('rtmdet_tiny_8xb32-300e_coco')
+    result = inferencer('demo/demo.jpg', show=True)
+    ```
+  </Step>
+</Steps>
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Modular design" icon="puzzle-piece" href="/advanced-guides/customize-models">
+    Compose detection pipelines from interchangeable backbones, necks, heads, and losses.
+  </Card>
+  <Card title="Flexible configuration" icon="sliders" href="/user-guides/configuration">
+    Hierarchical config files with inheritance, overrides, and command-line patching.
+  </Card>
+  <Card title="Training & evaluation" icon="chart-line" href="/user-guides/train">
+    Distributed multi-GPU training, mixed precision, and COCO/LVIS/VOC evaluation metrics.
+  </Card>
+  <Card title="Customization guides" icon="wrench" href="/advanced-guides/customize-dataset">
+    Extend MMDetection with custom datasets, data transforms, models, and loss functions.
+  </Card>
+</CardGroup>

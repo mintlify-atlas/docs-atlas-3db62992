@@ -1,0 +1,212 @@
+---
+title: "Create custom data transforms for MMDetection pipelines"
+description: "Learn how to write a custom transform with BaseTransform, implement the transform method, register it, and add it to a pipeline config."
+keywords: ["custom transform", "data pipeline", "BaseTransform", "TRANSFORMS", "MMDetection", "augmentation"]
+---
+
+Every image in MMDetection passes through a sequence of transform classes before reaching the model. Each transform is a callable that receives a `results` dict, modifies it in place (or returns a new one), and passes it to the next step. This page explains how to write your own transform, register it with the `TRANSFORMS` registry, and slot it into a pipeline config.
+
+## How the transform pipeline works
+
+A pipeline is a list of transform configs. MMDetection builds each transform by calling `TRANSFORMS.build(cfg)`, then applies them in order during data loading. The `results` dict carries the image and annotations through every step:
+
+```python example pipeline
+train_pipeline = [
+    dict(type='LoadImageFromFile'),       # loads img from disk → results['img']
+    dict(type='LoadAnnotations', with_bbox=True),  # loads gt_bboxes, gt_labels
+    dict(type='Resize', scale=(1333, 800), keep_ratio=True),
+    dict(type='RandomFlip', prob=0.5),
+    dict(type='PackDetInputs'),           # packs results into DetDataSample
+]
+```
+
+## The results dict
+
+The dict passed to `transform(results)` contains the following common keys:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `img` | `np.ndarray` | HWC BGR image array |
+| `img_shape` | `tuple` | `(height, width)` after current transforms |
+| `ori_shape` | `tuple` | Original image `(height, width)` |
+| `gt_bboxes` | `HorizontalBoxes` | Ground-truth bounding boxes |
+| `gt_labels` | `np.ndarray` | Integer class labels per box |
+| `gt_masks` | `PolygonMasks` or `BitmapMasks` | Instance masks (if loaded) |
+| `gt_ignore_flags` | `np.ndarray` | Boolean ignore flags per instance |
+| `scale_factor` | `np.ndarray` | Resize scale factors `(w_scale, h_scale)` |
+
+<Note>
+A transform may add, remove, or rename keys. Document any new keys your transform introduces so downstream transforms and the model know what to expect.
+</Note>
+
+## Write a custom transform
+
+<Steps>
+  <Step title="Subclass BaseTransform">
+    Create a file for your transform, for example `my_pipeline.py`. Import `BaseTransform` from `mmcv.transforms` and decorate your class with `@TRANSFORMS.register_module()`.
+
+    ```python my_pipeline.py
+    import random
+
+    from mmcv.transforms import BaseTransform
+    from mmdet.registry import TRANSFORMS
+
+
+    @TRANSFORMS.register_module()
+    class MyTransform(BaseTransform):
+        """Randomly add a flag to the results dict.
+
+        Args:
+            prob (float): Probability of applying the transform. Default: 0.5.
+        """
+
+        def __init__(self, prob: float = 0.5) -> None:
+            self.prob = prob
+
+        def transform(self, results: dict) -> dict:
+            if random.random() < self.prob:
+                results['dummy'] = True
+            return results
+    ```
+
+    The `transform` method is the only method you must implement. It must accept a dict and return a dict (or `None` to signal that this sample should be skipped).
+  </Step>
+
+  <Step title="Register the transform">
+    Register it via `custom_imports` in your config so the class is found at runtime without modifying the MMDetection source:
+
+    ```python configs/my_config.py
+    custom_imports = dict(
+        imports=['path.to.my_pipeline'],
+        allow_failed_imports=False)
+    ```
+
+    Alternatively, if you are working inside the MMDetection source tree, add an import to `mmdet/datasets/transforms/__init__.py`.
+  </Step>
+
+  <Step title="Add the transform to a pipeline config">
+    Insert your transform at the appropriate position in the pipeline list. Transforms that depend on `gt_bboxes` must come after `LoadAnnotations`. Transforms that should not alter the original shape should come before `Resize`.
+
+    ```python configs/my_config.py
+    train_pipeline = [
+        dict(type='LoadImageFromFile'),
+        dict(type='LoadAnnotations', with_bbox=True),
+        dict(type='Resize', scale=(1333, 800), keep_ratio=True),
+        dict(type='RandomFlip', prob=0.5),
+        dict(type='MyTransform', prob=0.2),
+        dict(type='PackDetInputs'),
+    ]
+
+    train_dataloader = dict(
+        dataset=dict(pipeline=train_pipeline))
+    ```
+  </Step>
+</Steps>
+
+## A practical example: random colour jitter
+
+The following transform applies random brightness and contrast jitter to `results['img']`:
+
+```python my_pipeline.py
+import random
+
+import numpy as np
+from mmcv.transforms import BaseTransform
+from mmdet.registry import TRANSFORMS
+
+
+@TRANSFORMS.register_module()
+class RandomColorJitter(BaseTransform):
+    """Randomly adjust brightness and contrast.
+
+    Args:
+        brightness_delta (int): Max absolute brightness delta. Default: 32.
+        contrast_range (tuple): Min and max contrast multiplier. Default: (0.5, 1.5).
+        prob (float): Probability of applying jitter. Default: 0.5.
+    """
+
+    def __init__(
+        self,
+        brightness_delta: int = 32,
+        contrast_range: tuple = (0.5, 1.5),
+        prob: float = 0.5,
+    ) -> None:
+        self.brightness_delta = brightness_delta
+        self.contrast_range = contrast_range
+        self.prob = prob
+
+    def transform(self, results: dict) -> dict:
+        if random.random() > self.prob:
+            return results
+
+        img = results['img'].astype(np.float32)
+
+        # brightness
+        delta = random.uniform(-self.brightness_delta, self.brightness_delta)
+        img += delta
+
+        # contrast
+        alpha = random.uniform(*self.contrast_range)
+        img = img * alpha
+
+        results['img'] = np.clip(img, 0, 255).astype(np.uint8)
+        return results
+```
+
+## Transforms that modify bounding boxes
+
+If your transform spatially modifies the image (crop, rotate, scale), you must apply the same transformation to `gt_bboxes`, `gt_masks`, and `gt_ignore_flags`. The `HorizontalBoxes` type used for `gt_bboxes` provides helpers for this:
+
+```python my_pipeline.py
+from mmcv.transforms import BaseTransform
+from mmdet.registry import TRANSFORMS
+
+
+@TRANSFORMS.register_module()
+class RandomCropFixed(BaseTransform):
+    """Example of a spatial transform that adjusts bboxes."""
+
+    def __init__(self, crop_size: tuple) -> None:
+        self.crop_h, self.crop_w = crop_size
+
+    def transform(self, results: dict) -> dict:
+        img = results['img']
+        h, w = img.shape[:2]
+
+        # compute crop region
+        x1 = max(0, (w - self.crop_w) // 2)
+        y1 = max(0, (h - self.crop_h) // 2)
+        x2 = min(w, x1 + self.crop_w)
+        y2 = min(h, y1 + self.crop_h)
+
+        results['img'] = img[y1:y2, x1:x2]
+        results['img_shape'] = results['img'].shape[:2]
+
+        # shift bboxes
+        if 'gt_bboxes' in results:
+            bboxes = results['gt_bboxes']
+            bboxes.translate_([-x1, -y1])
+            bboxes.clip_(results['img_shape'])
+            results['gt_bboxes'] = bboxes
+
+        return results
+```
+
+<Warning>
+After a spatial transform, clip bounding boxes to `img_shape` and remove instances whose boxes have zero area. Failing to do this causes issues during loss computation.
+</Warning>
+
+## Visualize your pipeline
+
+MMDetection ships a dataset browsing tool that renders the output of any pipeline on disk. This is the fastest way to verify your transform behaves correctly:
+
+```bash
+python tools/misc/browse_dataset.py \
+    configs/my_config.py \
+    --output-dir /tmp/pipeline_vis \
+    --not-show
+```
+
+<Tip>
+Run the browser tool before training to confirm boxes and masks are aligned after your transform is applied. Visual inspection catches coordinate bugs that numerical tests might miss.
+</Tip>

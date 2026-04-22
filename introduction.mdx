@@ -1,0 +1,71 @@
+---
+title: "MMDetection: OpenMMLab Detection Toolbox"
+description: "MMDetection is an open-source PyTorch object detection toolbox supporting object detection, instance segmentation, panoptic segmentation, and more."
+keywords: ["mmdetection", "object detection", "instance segmentation", "panoptic segmentation", "openmmlab", "pytorch"]
+---
+
+MMDetection is an open-source object detection toolbox built on PyTorch and part of the [OpenMMLab](https://openmmlab.com/) ecosystem. It provides a rich collection of detection algorithms, reusable components, and training infrastructure that lets you train, test, and deploy state-of-the-art detection models with minimal boilerplate.
+
+## What MMDetection does
+
+MMDetection directly supports four detection tasks out of the box:
+
+- **Object detection** — predict bounding boxes and class labels for objects in an image
+- **Instance segmentation** — produce per-instance pixel masks in addition to bounding boxes
+- **Panoptic segmentation** — combine semantic and instance segmentation into a unified scene understanding
+- **Semi-supervised object detection** — leverage unlabeled data alongside labeled data during training
+
+The toolbox stems from the codebase developed by the MMDet team, who won the [COCO Detection Challenge](http://cocodataset.org/#detection-leaderboard) in 2018. It includes implementations of more than 40 object detection architectures and 17 backbone networks.
+
+## Framework components
+
+MMDetection is organized into seven main packages. Understanding this structure helps you navigate the codebase and customize individual parts without touching unrelated code.
+
+| Component | Description |
+|---|---|
+| `apis` | High-level APIs for model inference, including `DetInferencer`, `init_detector`, and `inference_detector` |
+| `structures` | Core data structures including `DetDataSample`, `bbox`, and `mask` representations |
+| `datasets` | Dataset implementations for COCO, VOC, Cityscapes, and others, plus data augmentation transforms and sampler strategies |
+| `models` | Detectors, backbones, necks, detection heads, segmentation heads, loss functions, and task modules |
+| `engine` | Runtime components — runner extensions, learning rate schedulers, optimizer wrappers, and training hooks |
+| `evaluation` | Metrics for measuring model performance including COCO AP, VOC mAP, and panoptic quality |
+| `visualization` | Tools for rendering and saving detection results as annotated images |
+
+### Models in depth
+
+The `models` component is the most substantial part of MMDetection and is itself organized into sub-packages:
+
+- **detectors** — full detector class definitions (Faster R-CNN, DETR, RTMDet, etc.)
+- **backbones** — feature extractors (ResNet, Swin Transformer, ConvNeXt, etc.)
+- **necks** — feature pyramid networks (FPN, PAFPN, etc.)
+- **dense\_heads** — detection heads that predict from dense feature maps (FCOS, RetinaNet, etc.)
+- **roi\_heads** — heads that operate on region proposals (RoI Align, cascade heads, etc.)
+- **seg\_heads** — segmentation heads for instance and panoptic tasks
+- **losses** — focal loss, GIoU loss, generalized focal loss, and more
+- **task\_modules** — assigners, samplers, box coders, and prior generators
+- **data\_preprocessors** — normalizes and pads inputs before they enter the model
+
+## Key features
+
+**Modular design.** The framework decomposes every detection pipeline into interchangeable components. You can swap a backbone, replace a neck, or plug in a custom loss function by changing a single line in a config file — no subclassing or code duplication required.
+
+**High efficiency.** All bounding box and mask operations run on GPU. Training speed is comparable to or faster than Detectron2, maskrcnn-benchmark, and SimpleDet.
+
+**State-of-the-art models.** MMDetection ships pre-trained weights for RTMDet (real-time instance segmentation and object detection), DINO, Grounding DINO, MM-Grounding-DINO, and many classic architectures. RTMDet achieves 52.8 AP on COCO at 322 FPS (TensorRT FP16 on a 3090).
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="wrench" href="/get-started/installation">
+    Set up MMDetection on Linux, Windows, or macOS with conda and MIM.
+  </Card>
+  <Card title="Quickstart" icon="bolt" href="/get-started/quickstart">
+    Run object detection inference on an image in a few commands.
+  </Card>
+  <Card title="User guides" icon="book-open" href="/user-guides/configuration">
+    Learn how to configure training runs, prepare datasets, and evaluate results.
+  </Card>
+  <Card title="Model zoo" icon="database" href="/model-zoo/overview">
+    Browse pre-trained checkpoints for detection, segmentation, and tracking.
+  </Card>
+</CardGroup>

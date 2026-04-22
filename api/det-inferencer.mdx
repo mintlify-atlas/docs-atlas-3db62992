@@ -1,0 +1,406 @@
+---
+title: 'DetInferencer: high-level detection inference API'
+description: 'Run object detection inference on images, directories, and video frames using DetInferencer or the legacy init_detector and inference_detector functions.'
+keywords: ['DetInferencer', 'inference', 'init_detector', 'inference_detector', 'mmdet', 'object detection']
+---
+
+`DetInferencer` is the recommended high-level API for running MMDetection models in production or evaluation scripts. It handles model loading, preprocessing, batching, visualization, and result serialization in a single callable object. For lower-level control, the legacy `init_detector` and `inference_detector` functions are also available in `mmdet.apis`.
+
+## DetInferencer
+
+`mmdet.apis.DetInferencer` extends `mmengine.infer.BaseInferencer` and wraps the full inference pipeline. You instantiate it once and then call it like a function on any number of inputs.
+
+### Constructor
+
+<ParamField path="model" type="str | ModelType" default="None">
+  Path to a config file, a model name from the metafile (e.g. `"rtmdet-s"` or `"rtmdet_s_8xb32-300e_coco"`), or a pre-built `nn.Module`. When omitted, `weights` must point to an MMEngine checkpoint that embeds the config string.
+</ParamField>
+
+<ParamField path="weights" type="str" default="None">
+  Path to a checkpoint file. When `model` is a metafile name the matching weights are downloaded automatically; otherwise this must be supplied explicitly.
+</ParamField>
+
+<ParamField path="device" type="str" default="None">
+  PyTorch device string such as `"cuda:0"` or `"cpu"`. When `None`, the first available device is selected automatically.
+</ParamField>
+
+<ParamField path="scope" type="str" default="mmdet">
+  MMEngine registry scope used to look up registered modules. Change this only when you are using a custom scope.
+</ParamField>
+
+<ParamField path="palette" type="str" default="none">
+  Color palette for visualization. Priority order is: argument → config → checkpoint. Supported values: `"coco"`, `"voc"`, `"citys"`, `"random"`, `"none"`.
+</ParamField>
+
+<ParamField path="show_progress" type="bool" default="True">
+  Whether to display a Rich progress bar during inference.
+</ParamField>
+
+### `__call__`
+
+Calling the inferencer object runs the full inference pipeline and returns a result dict.
+
+```python
+results = inferencer(inputs, batch_size=1, ...)
+```
+
+#### Input parameters
+
+<ParamField path="inputs" type="str | np.ndarray | list">
+  One or more inputs. Accepts a file path, a URL, a directory path (all image files inside are processed), a `numpy.ndarray` in HWC BGR format, or a list mixing any of the above.
+</ParamField>
+
+<ParamField path="batch_size" type="int" default="1">
+  Number of images processed per forward pass.
+</ParamField>
+
+<ParamField path="show" type="bool" default="False">
+  Display the visualization result in an OpenCV popup window. Requires a display (will fail on headless servers without X11 forwarding).
+</ParamField>
+
+<ParamField path="return_vis" type="bool" default="False">
+  When `True`, the rendered image(s) are included in the return dict under `visualization` as numpy arrays. Useful for embedding in Jupyter notebooks without saving to disk.
+</ParamField>
+
+<ParamField path="wait_time" type="int" default="0">
+  Duration in seconds for which the popup window stays open. `0` means wait for a keypress.
+</ParamField>
+
+<ParamField path="no_save_vis" type="bool" default="False">
+  When `True`, visualization images are never written to disk even when `out_dir` is set.
+</ParamField>
+
+<ParamField path="draw_pred" type="bool" default="True">
+  Whether to draw predicted bounding boxes and masks on the output image.
+</ParamField>
+
+<ParamField path="pred_score_thr" type="float" default="0.3">
+  Minimum confidence score for a detection to be drawn or included in the serialized output.
+</ParamField>
+
+<ParamField path="return_datasamples" type="bool" default="False">
+  When `True`, `predictions` in the return dict contains `DetDataSample` objects instead of plain dicts.
+</ParamField>
+
+<ParamField path="print_result" type="bool" default="False">
+  Print the serialized result dict to stdout.
+</ParamField>
+
+<ParamField path="no_save_pred" type="bool" default="True">
+  When `True`, prediction JSON files are never written to disk even when `out_dir` is set.
+</ParamField>
+
+<ParamField path="out_dir" type="str" default="">
+  Root directory for saving visualization images (`<out_dir>/vis/`) and prediction JSON files (`<out_dir>/preds/`). No files are saved when this is empty.
+</ParamField>
+
+<ParamField path="texts" type="str | list[str]" default="None">
+  Text prompts for open-vocabulary detectors (e.g. GLIP, Grounding DINO). A single string is broadcast to all inputs. Use period-separated phrases for multiple categories: `"a dog . a cat"`.
+</ParamField>
+
+<ParamField path="stuff_texts" type="str | list[str]" default="None">
+  Stuff text prompts for panoptic open-vocabulary models (e.g. background classes like `"sky . road"`). Applied alongside `texts` for thing categories.
+</ParamField>
+
+<ParamField path="custom_entities" type="bool" default="False">
+  Pass `True` to use custom entity tokens with GLIP or Grounding DINO.
+</ParamField>
+
+#### Return value
+
+<ResponseField name="predictions" type="list">
+  One entry per input image. When `return_datasamples=False` each entry is a dict:
+  <Expandable title="fields">
+    <ResponseField name="labels" type="list[int]">
+      Integer class index for each detected instance.
+    </ResponseField>
+    <ResponseField name="scores" type="list[float]">
+      Confidence score for each detected instance.
+    </ResponseField>
+    <ResponseField name="bboxes" type="list[list[float]]">
+      Bounding boxes in `[x1, y1, x2, y2]` format. Present for instance detection results.
+    </ResponseField>
+    <ResponseField name="masks" type="list[dict]">
+      RLE-encoded masks (COCO format). Present when the model outputs instance segmentation masks.
+    </ResponseField>
+    <ResponseField name="panoptic_seg" type="np.ndarray">
+      RGB panoptic segmentation map. Present when the model outputs panoptic segmentation and `out_dir` is empty.
+    </ResponseField>
+    <ResponseField name="panoptic_seg_path" type="str">
+      Path to the saved panoptic PNG. Present when `out_dir` is set.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="visualization" type="list[np.ndarray] | None">
+  Visualized images as HWC BGR arrays. `None` when visualization was neither shown nor saved nor returned via `return_vis=True`.
+</ResponseField>
+
+---
+
+## Code examples
+
+<CodeGroup>
+
+```python single image
+from mmdet.apis import DetInferencer
+
+inferencer = DetInferencer(model='rtmdet-s', device='cuda:0')
+
+result = inferencer('demo/demo.jpg', pred_score_thr=0.5)
+print(result['predictions'][0]['labels'])
+print(result['predictions'][0]['scores'])
+print(result['predictions'][0]['bboxes'])
+```
+
+```python batch inference
+from mmdet.apis import DetInferencer
+
+inferencer = DetInferencer(
+    model='configs/rtmdet/rtmdet_s_8xb32-300e_coco.py',
+    weights='checkpoints/rtmdet_s_8xb32-300e_coco_20220905_161602-387f9c8c.pth',
+    device='cuda:0',
+)
+
+images = ['image1.jpg', 'image2.jpg', 'image3.jpg']
+results = inferencer(images, batch_size=4, pred_score_thr=0.3)
+for pred in results['predictions']:
+    print(pred['labels'], pred['scores'])
+```
+
+```python save results to disk
+from mmdet.apis import DetInferencer
+
+inferencer = DetInferencer(model='rtmdet-s')
+
+# Saves vis images to ./outputs/vis/ and JSON to ./outputs/preds/
+inferencer(
+    'images/',
+    out_dir='./outputs',
+    no_save_pred=False,
+    pred_score_thr=0.4,
+)
+```
+
+```python open-vocabulary (Grounding DINO)
+from mmdet.apis import DetInferencer
+
+inferencer = DetInferencer(
+    model='groundingdino_swint_ogc_mmdet-822d7e9d.py',
+    weights='groundingdino_swint_ogc_mmdet-822d7e9d.pth',
+)
+
+result = inferencer(
+    'demo/demo.jpg',
+    texts='a dog . a cat',
+    pred_score_thr=0.3,
+)
+print(result['predictions'][0])
+```
+
+</CodeGroup>
+
+<Tip>
+Pass `return_vis=True` to get the annotated image as a numpy array without saving it to disk — useful for embedding results in a Jupyter notebook.
+</Tip>
+
+---
+
+## Legacy functions
+
+These two functions from `mmdet.apis` predate `DetInferencer` and are kept for backward compatibility. Prefer `DetInferencer` for new code.
+
+### `init_detector`
+
+Initialize a detector from a config file and optional checkpoint.
+
+```python
+from mmdet.apis import init_detector
+
+model = init_detector(
+    config='configs/rtmdet/rtmdet_s_8xb32-300e_coco.py',
+    checkpoint='checkpoints/rtmdet_s_8xb32-300e_coco.pth',
+    device='cuda:0',
+)
+```
+
+<ParamField path="config" type="str | Path | mmengine.Config" required>
+  Path to a config file, a `pathlib.Path`, or a pre-loaded `mmengine.Config` object.
+</ParamField>
+
+<ParamField path="checkpoint" type="str" default="None">
+  Path to a checkpoint. When `None` the model uses random weights and COCO class names.
+</ParamField>
+
+<ParamField path="palette" type="str" default="none">
+  Color palette: `"coco"`, `"voc"`, `"citys"`, `"random"`, or `"none"`.
+</ParamField>
+
+<ParamField path="device" type="str" default="cuda:0">
+  Target device string.
+</ParamField>
+
+<ParamField path="cfg_options" type="dict" default="None">
+  Key-value overrides merged into the config via `Config.merge_from_dict`.
+</ParamField>
+
+Returns `nn.Module` — the model moved to the target device and set to eval mode.
+
+### `inference_detector`
+
+Run a single forward pass on one or more images.
+
+```python
+from mmdet.apis import init_detector, inference_detector
+
+model = init_detector('configs/rtmdet/rtmdet_s_8xb32-300e_coco.py',
+                      'checkpoints/rtmdet_s.pth')
+
+# single image → DetDataSample
+result = inference_detector(model, 'demo/demo.jpg')
+
+# batch → list[DetDataSample]
+results = inference_detector(model, ['a.jpg', 'b.jpg'])
+```
+
+<ParamField path="model" type="nn.Module" required>
+  A model returned by `init_detector`.
+</ParamField>
+
+<ParamField path="imgs" type="str | np.ndarray | Sequence[str | np.ndarray]" required>
+  Image path(s), URL(s), or pre-loaded numpy arrays in HWC BGR format.
+</ParamField>
+
+<ParamField path="test_pipeline" type="mmcv.transforms.Compose" default="None">
+  Custom test pipeline. When `None`, the pipeline is built from `model.cfg`.
+</ParamField>
+
+<ParamField path="text_prompt" type="str" default="None">
+  Text prompt for open-vocabulary models.
+</ParamField>
+
+Returns `DetDataSample` for a single input or `list[DetDataSample]` for a sequence.
+
+<Note>
+`inference_detector` always runs with `torch.no_grad()`. CPU inference is supported for most models but is blocked for models containing `RoIPool` layers.
+</Note>
+
+---
+
+## Tracking and async APIs
+
+These additional functions are exported from `mmdet.apis` for tracking workflows and async inference.
+
+### `async_inference_detector`
+
+Async variant of `inference_detector` for use in asyncio-based pipelines.
+
+```python
+import asyncio
+from mmdet.apis import init_detector, async_inference_detector
+
+model = init_detector('configs/rtmdet/rtmdet_s_8xb32-300e_coco.py',
+                      'checkpoints/rtmdet_s.pth')
+
+async def run():
+    result = await async_inference_detector(model, 'demo/demo.jpg')
+    return result
+
+asyncio.run(run())
+```
+
+<ParamField path="model" type="nn.Module" required>
+  A model returned by `init_detector`.
+</ParamField>
+
+<ParamField path="imgs" type="str | np.ndarray | list" required>
+  Image path(s) or pre-loaded numpy arrays.
+</ParamField>
+
+Returns an awaitable that resolves to `DetDataSample` or `list[DetDataSample]`.
+
+---
+
+### `inference_mot`
+
+Run inference on a single video frame with a multi-object tracking (MOT) model.
+
+```python
+import cv2
+from mmdet.apis import init_track_model, inference_mot
+
+model = init_track_model(
+    'configs/bytetrack/bytetrack_yolox_x_8xb4-amp-80e_crowdhuman-mot17halftrain_test-mot17halfval.py',
+    checkpoint='checkpoints/bytetrack_yolox_x.pth',
+)
+
+cap = cv2.VideoCapture('demo/demo.mp4')
+frame_id = 0
+video_len = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
+    result = inference_mot(model, frame, frame_id=frame_id, video_len=video_len)
+    frame_id += 1
+```
+
+<ParamField path="model" type="nn.Module" required>
+  A tracking model returned by `init_track_model`.
+</ParamField>
+
+<ParamField path="img" type="np.ndarray" required>
+  A single video frame as a numpy array (HWC, BGR).
+</ParamField>
+
+<ParamField path="frame_id" type="int" required>
+  0-indexed frame number in the video sequence.
+</ParamField>
+
+<ParamField path="video_len" type="int" required>
+  Total number of frames in the video, used by some tracking algorithms to schedule memory.
+</ParamField>
+
+Returns a `SampleList` containing tracking results with track IDs, bounding boxes, and class labels.
+
+---
+
+### `init_track_model`
+
+Initialize a multi-object tracking model from a config file.
+
+```python
+from mmdet.apis import init_track_model
+
+model = init_track_model(
+    config='configs/bytetrack/bytetrack_yolox_x_8xb4-amp-80e_crowdhuman-mot17halftrain_test-mot17halfval.py',
+    checkpoint='checkpoints/bytetrack_yolox_x.pth',
+    device='cuda:0',
+)
+```
+
+<ParamField path="config" type="str | mmengine.Config" required>
+  Path to a tracking config file or a pre-loaded `Config` object.
+</ParamField>
+
+<ParamField path="checkpoint" type="str" default="None">
+  Path to the main model checkpoint.
+</ParamField>
+
+<ParamField path="detector" type="str" default="None">
+  Path to a separate detector checkpoint. Used by tracking algorithms (e.g. SORT) that load the detector independently.
+</ParamField>
+
+<ParamField path="reid" type="str" default="None">
+  Path to a ReID checkpoint. Used by tracking algorithms that include a Re-ID module (e.g. DeepSORT).
+</ParamField>
+
+<ParamField path="device" type="str" default="cuda:0">
+  Target device string.
+</ParamField>
+
+<ParamField path="cfg_options" type="dict" default="None">
+  Key-value overrides merged into the config.
+</ParamField>
+
+Returns `nn.Module` — the tracking model set to eval mode on the target device.

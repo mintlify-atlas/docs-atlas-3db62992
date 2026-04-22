@@ -1,0 +1,326 @@
+---
+title: 'Evaluation metrics API: COCO, VOC, and LVIS'
+description: 'Configure and run CocoMetric, VOCMetric, and LVISMetric to evaluate object detection and segmentation results using standard COCO, VOC, and LVIS benchmarks.'
+keywords: ['evaluation', 'CocoMetric', 'VOCMetric', 'LVISMetric', 'mAP', 'AP50', 'benchmark', 'mmdet']
+---
+
+MMDetection evaluation metrics inherit from `mmengine.evaluator.BaseMetric` and are registered in the `METRICS` registry. They accumulate per-sample predictions with `process()` during validation or testing, then compute final numbers with `compute_metrics()` once all batches have been processed.
+
+## CocoMetric
+
+`mmdet.evaluation.CocoMetric` implements the standard COCO detection evaluation protocol and supports bounding-box detection (`bbox`), instance segmentation (`segm`), and proposal evaluation (`proposal` / `proposal_fast`).
+
+### Parameters
+
+<ParamField path="ann_file" type="str" default="None">
+  Path to a COCO-format annotation JSON. When omitted, the metric converts ground-truth annotations from the dataset on-the-fly.
+</ParamField>
+
+<ParamField path="metric" type="str | list[str]" default="bbox">
+  One or more metrics to compute. Valid values: `"bbox"`, `"segm"`, `"proposal"`, `"proposal_fast"`. Pass a list to evaluate multiple metrics in one pass.
+</ParamField>
+
+<ParamField path="classwise" type="bool" default="False">
+  Report per-class AP in addition to the mean AP.
+</ParamField>
+
+<ParamField path="proposal_nums" type="Sequence[int]" default="(100, 300, 1000)">
+  Numbers of top proposals to consider when computing recall/precision for the `proposal` metric.
+</ParamField>
+
+<ParamField path="iou_thrs" type="float | list[float]" default="None">
+  IoU threshold(s) for AP computation. Defaults to `[0.50, 0.55, …, 0.95]` (10 thresholds). Pass `0.5` to compute AP50 only.
+</ParamField>
+
+<ParamField path="metric_items" type="list[str]" default="None">
+  Subset of result names to record. Defaults to all items produced by the metric.
+</ParamField>
+
+<ParamField path="format_only" type="bool" default="False">
+  Serialize results to JSON without running evaluation. Used to prepare submissions for the COCO test server.
+</ParamField>
+
+<ParamField path="outfile_prefix" type="str" default="None">
+  File path prefix for result JSON files. Required when `format_only=True`.
+</ParamField>
+
+<ParamField path="backend_args" type="dict" default="None">
+  File backend arguments (e.g. for loading from cloud storage).
+</ParamField>
+
+<ParamField path="collect_device" type="str" default="cpu">
+  Device for result collection during distributed evaluation. Either `"cpu"` or `"gpu"`.
+</ParamField>
+
+<ParamField path="prefix" type="str" default="None">
+  String prefix added to all metric names in the result dict (e.g. `"coco"`). Falls back to `default_prefix = "coco"`.
+</ParamField>
+
+<ParamField path="sort_categories" type="bool" default="False">
+  Sort categories before evaluation. Required for Objects365 datasets whose annotation files have inconsistent category ordering.
+</ParamField>
+
+<ParamField path="use_mp_eval" type="bool" default="False">
+  Use multiprocessing for COCO evaluation. Speeds up evaluation on large datasets.
+</ParamField>
+
+### Return values
+
+`CocoMetric.compute_metrics()` returns an `OrderedDict` with keys prefixed by `prefix`. Typical keys:
+
+<ResponseField name="coco/bbox_mAP" type="float">
+  Mean AP averaged over IoU thresholds 0.50:0.95.
+</ResponseField>
+
+<ResponseField name="coco/bbox_mAP_50" type="float">
+  AP at IoU threshold 0.50 (AP50).
+</ResponseField>
+
+<ResponseField name="coco/bbox_mAP_75" type="float">
+  AP at IoU threshold 0.75 (AP75).
+</ResponseField>
+
+<ResponseField name="coco/bbox_mAP_s" type="float">
+  AP for small objects (area &lt; 32² px).
+</ResponseField>
+
+<ResponseField name="coco/bbox_mAP_m" type="float">
+  AP for medium objects (32² ≤ area &lt; 96² px).
+</ResponseField>
+
+<ResponseField name="coco/bbox_mAP_l" type="float">
+  AP for large objects (area ≥ 96² px).
+</ResponseField>
+
+When `metric="segm"` the same set is reported with the `segm_` prefix. When `classwise=True`, per-class AP values are appended with keys like `coco/bbox_mAP_classwise/person`.
+
+---
+
+## VOCMetric
+
+`mmdet.evaluation.VOCMetric` implements the Pascal VOC mean AP protocol.
+
+### Parameters
+
+<ParamField path="iou_thrs" type="float | list[float]" default="0.5">
+  IoU threshold(s). VOC 2007 uses `0.5`.
+</ParamField>
+
+<ParamField path="scale_ranges" type="list[tuple]" default="None">
+  Optional list of `(min_area, max_area)` scale ranges for scale-aware mAP. When `None`, all boxes are included.
+</ParamField>
+
+<ParamField path="metric" type="str | list[str]" default="mAP">
+  Metric to compute. Valid values: `"mAP"`, `"recall"`. Only one metric is evaluated at a time; the first element of a list is used.
+</ParamField>
+
+<ParamField path="proposal_nums" type="Sequence[int]" default="(100, 300, 1000)">
+  Proposal numbers used when `metric="recall"`.
+</ParamField>
+
+<ParamField path="eval_mode" type="str" default="11points">
+  Integration method for the precision-recall curve. `"11points"` is the VOC 2007 standard; `"area"` is the VOC 2012 standard.
+</ParamField>
+
+<ParamField path="collect_device" type="str" default="cpu">
+  Device for result collection during distributed evaluation.
+</ParamField>
+
+<ParamField path="prefix" type="str" default="None">
+  Metric name prefix. Falls back to `default_prefix = "pascal_voc"`.
+</ParamField>
+
+### Return values
+
+<ResponseField name="pascal_voc/mAP" type="float">
+  Mean AP across all classes at the configured IoU threshold.
+</ResponseField>
+
+<ResponseField name="pascal_voc/AP50" type="float">
+  AP at IoU 0.50 (when `iou_thrs=0.5`).
+</ResponseField>
+
+---
+
+## LVISMetric
+
+`mmdet.evaluation.LVISMetric` extends `CocoMetric` for the LVIS large-vocabulary benchmark. It uses the official `lvis` Python package for evaluation.
+
+<Note>
+Install the LVIS API before using this metric: `pip install git+https://github.com/lvis-dataset/lvis-api.git`
+</Note>
+
+### Parameters
+
+`LVISMetric` accepts the same parameters as `CocoMetric`. Key differences:
+
+- `default_prefix` is `"lvis"` instead of `"coco"`.
+- Frequency-grouped AP (`APr`, `APc`, `APf`) is reported for rare, common, and frequent categories.
+- Results are serialized using `LVISResults` from the official API.
+
+### Return values
+
+<ResponseField name="lvis/bbox_mAP" type="float">
+  Mean AP averaged over IoU thresholds 0.50:0.95.
+</ResponseField>
+
+<ResponseField name="lvis/bbox_mAP_50" type="float">
+  AP at IoU 0.50.
+</ResponseField>
+
+<ResponseField name="lvis/bbox_mAP_75" type="float">
+  AP at IoU 0.75.
+</ResponseField>
+
+<ResponseField name="lvis/bbox_APr" type="float">
+  AP on rare categories (fewer than 10 training instances).
+</ResponseField>
+
+<ResponseField name="lvis/bbox_APc" type="float">
+  AP on common categories (10–100 training instances).
+</ResponseField>
+
+<ResponseField name="lvis/bbox_APf" type="float">
+  AP on frequent categories (more than 100 training instances).
+</ResponseField>
+
+---
+
+## Configuring metrics in a test config
+
+Metrics are specified under `test_evaluator` in the MMEngine config:
+
+<CodeGroup>
+
+```python COCO detection
+test_evaluator = dict(
+    type='CocoMetric',
+    ann_file='data/coco/annotations/instances_val2017.json',
+    metric='bbox',
+    classwise=True,
+    format_only=False,
+)
+```
+
+```python COCO instance segmentation
+test_evaluator = dict(
+    type='CocoMetric',
+    ann_file='data/coco/annotations/instances_val2017.json',
+    metric=['bbox', 'segm'],
+    classwise=False,
+)
+```
+
+```python VOC
+test_evaluator = dict(
+    type='VOCMetric',
+    metric='mAP',
+    eval_mode='11points',   # VOC 2007 style
+)
+```
+
+```python LVIS
+test_evaluator = dict(
+    type='LVISMetric',
+    ann_file='data/lvis_v1/annotations/lvis_v1_val.json',
+    metric=['bbox', 'segm'],
+    classwise=True,
+)
+```
+
+```python AP50 only (custom IoU)
+test_evaluator = dict(
+    type='CocoMetric',
+    ann_file='data/coco/annotations/instances_val2017.json',
+    metric='bbox',
+    iou_thrs=[0.5],
+)
+```
+
+</CodeGroup>
+
+---
+
+## Running evaluation
+
+<Tabs>
+  <Tab title="test.py script">
+    ```bash
+    python tools/test.py \
+        configs/rtmdet/rtmdet_s_8xb32-300e_coco.py \
+        checkpoints/rtmdet_s_8xb32-300e_coco.pth \
+        --work-dir ./eval_output
+    ```
+
+    Results are printed to stdout and saved to `eval_output/TIMESTAMP/vis_data/scalars.json`.
+  </Tab>
+  <Tab title="Programmatic evaluation">
+    ```python
+    from mmengine.evaluator import Evaluator
+    from mmdet.evaluation import CocoMetric
+
+    metric = CocoMetric(
+        ann_file='data/coco/annotations/instances_val2017.json',
+        metric='bbox',
+    )
+    evaluator = Evaluator(metrics=metric)
+
+    # Iterate over your dataloader and collect results
+    for data_batch in dataloader:
+        with torch.no_grad():
+            outputs = model.test_step(data_batch)
+        evaluator.process(data_batch, outputs)
+
+    results = evaluator.evaluate(size=len(dataset))
+    print(results)
+    # {'coco/bbox_mAP': 0.452, 'coco/bbox_mAP_50': 0.631, ...}
+    ```
+  </Tab>
+  <Tab title="Distributed testing">
+    ```bash
+    # 4 GPUs
+    bash tools/dist_test.sh \
+        configs/rtmdet/rtmdet_s_8xb32-300e_coco.py \
+        checkpoints/rtmdet_s_8xb32-300e_coco.pth \
+        4
+    ```
+
+    Each rank processes a shard; results are gathered on the main process before `compute_metrics` is called.
+  </Tab>
+</Tabs>
+
+### Reading results
+
+The evaluator returns an `OrderedDict`. Keys follow the pattern `<prefix>/<metric_name>`:
+
+```python
+{
+    'coco/bbox_mAP':    0.452,
+    'coco/bbox_mAP_50': 0.631,
+    'coco/bbox_mAP_75': 0.492,
+    'coco/bbox_mAP_s':  0.284,
+    'coco/bbox_mAP_m':  0.490,
+    'coco/bbox_mAP_l':  0.584,
+}
+```
+
+<Tip>
+Pass `classwise=True` to `CocoMetric` or `LVISMetric` to get a per-category breakdown. The per-class entries appear in the same result dict with keys like `coco/bbox_mAP_classwise/person`.
+</Tip>
+
+---
+
+## format_only mode
+
+When you want to submit results to an evaluation server without running local evaluation, set `format_only=True` and provide `outfile_prefix`:
+
+```python
+test_evaluator = dict(
+    type='CocoMetric',
+    metric='bbox',
+    format_only=True,
+    outfile_prefix='./work_dirs/coco_test_results',
+)
+```
+
+The metric writes `<outfile_prefix>.bbox.json` (and `<outfile_prefix>.segm.json` for `segm` metric) in COCO results format, which you can upload directly to the COCO evaluation server.
